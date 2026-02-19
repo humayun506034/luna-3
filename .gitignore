@@ -1,0 +1,12 @@
+node_modules
+package-lock.json
+.env
+dist
+note.txt
+
+# Ignore uploaded files
+/uploads/*
+!/uploads/.gitkeep
+pnpm-lock.yaml
+text.txt
+text2.txt
