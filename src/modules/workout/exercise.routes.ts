@@ -1,3 +1,77 @@
+// import express from 'express';
+// import auth from '../../middleware/auth';
+// import { userRole } from '../../constents';
+// import exerciseController from './exercise.controller';
+// import { upload } from '../../util/uploadImgToCludinary';
+
+// const exerciseRoutes = express.Router();
+
+// // Create a common exercise (Admin only, with file upload)
+// exerciseRoutes.post(
+//   '/createCommonExercise',
+//   auth([userRole.admin]),
+//   upload.single('file'),
+//   exerciseController.createCommonExercise
+// );
+
+// // Create a personalized exercise (Authenticated users, with file upload)
+// exerciseRoutes.post(
+//   '/createPersonalizeExercise',
+//   auth([userRole.user, userRole.admin]),
+//   upload.single('file'),
+//   exerciseController.createPersonalizeExercise
+// );
+
+// // Get both common and personalized exercises (Authenticated users)
+// exerciseRoutes.get(
+//   '/getExerciseBothCommonAndPersonalize',
+//   auth([userRole.user, userRole.admin]),
+//   exerciseController.getExerciseBothCommonAndPersonalize
+// );
+
+// // Get exercise by ID (Authenticated users)
+// exerciseRoutes.get(
+//   '/getExerciseById',
+//   auth([userRole.user, userRole.admin]),
+//   exerciseController.getExerciseById
+// );
+
+// // Perform an exercise (Authenticated users)
+// exerciseRoutes.post(
+//   '/performExercise',
+//   auth([userRole.user, userRole.admin]),
+//   exerciseController.performExercise
+// );
+
+// // Mark exercise as completed (Authenticated users)
+// exerciseRoutes.patch(
+//   '/markExerciseAsCompleated',
+//   auth([userRole.user, userRole.admin]),
+//   exerciseController.markExerciseAsCompleated
+// );
+
+// // Delete exercise by ID (Authenticated user or admin)
+// exerciseRoutes.delete(
+//   '/deleteExercise/:id',
+//   auth([userRole.user, userRole.admin]),
+//   exerciseController.deleteExercise
+// );
+
+// exerciseRoutes.get(
+//   '/performed-exercises/:exerciseId',
+//   auth([userRole.user]),
+//   exerciseController.getPerformedExerciseById
+// );
+
+// exerciseRoutes.get(
+//   '/performed-exercises',
+//   auth([userRole.user]),
+//   exerciseController.getAllPerformedExercise
+// );
+
+// export default exerciseRoutes;
+
+
 import express from 'express';
 import auth from '../../middleware/auth';
 import { userRole } from '../../constents';
@@ -6,15 +80,22 @@ import { upload } from '../../util/uploadImgToCludinary';
 
 const exerciseRoutes = express.Router();
 
-// Create a common exercise (Admin only, with file upload)
+// Create exercise (canonical route)
 exerciseRoutes.post(
-  '/createCommonExercise',
-  auth([userRole.admin]),
+  '/createExercise',
+  auth([userRole.user, userRole.admin]),
   upload.single('file'),
   exerciseController.createCommonExercise
 );
 
-// Create a personalized exercise (Authenticated users, with file upload)
+// Backward-compatible aliases
+exerciseRoutes.post(
+  '/createCommonExercise',
+  auth([userRole.admin, userRole.user]),
+  upload.single('file'),
+  exerciseController.createCommonExercise
+);
+
 exerciseRoutes.post(
   '/createPersonalizeExercise',
   auth([userRole.user, userRole.admin]),
@@ -22,35 +103,30 @@ exerciseRoutes.post(
   exerciseController.createPersonalizeExercise
 );
 
-// Get both common and personalized exercises (Authenticated users)
 exerciseRoutes.get(
   '/getExerciseBothCommonAndPersonalize',
   auth([userRole.user, userRole.admin]),
   exerciseController.getExerciseBothCommonAndPersonalize
 );
 
-// Get exercise by ID (Authenticated users)
 exerciseRoutes.get(
   '/getExerciseById',
   auth([userRole.user, userRole.admin]),
   exerciseController.getExerciseById
 );
 
-// Perform an exercise (Authenticated users)
 exerciseRoutes.post(
   '/performExercise',
   auth([userRole.user, userRole.admin]),
   exerciseController.performExercise
 );
 
-// Mark exercise as completed (Authenticated users)
 exerciseRoutes.patch(
   '/markExerciseAsCompleated',
   auth([userRole.user, userRole.admin]),
   exerciseController.markExerciseAsCompleated
 );
 
-// Delete exercise by ID (Authenticated user or admin)
 exerciseRoutes.delete(
   '/deleteExercise/:id',
   auth([userRole.user, userRole.admin]),
@@ -67,6 +143,57 @@ exerciseRoutes.get(
   '/performed-exercises',
   auth([userRole.user]),
   exerciseController.getAllPerformedExercise
+);
+
+// New workout-log routes (from newWorkout workout-related part)
+exerciseRoutes.post(
+  '/workouts/logs',
+  auth([userRole.user, userRole.admin]),
+  upload.single('file'),
+  exerciseController.createWorkoutLog
+);
+
+exerciseRoutes.patch(
+  '/workouts/logs/:id',
+  auth([userRole.user, userRole.admin]),
+  upload.single('file'),
+  exerciseController.updateWorkoutLog
+);
+
+exerciseRoutes.get(
+  '/workouts/logs',
+  auth([userRole.user, userRole.admin]),
+  exerciseController.listWorkoutLogs
+);
+
+exerciseRoutes.delete(
+  '/workouts/logs/:id',
+  auth([userRole.user, userRole.admin]),
+  exerciseController.deleteWorkoutLog
+);
+
+exerciseRoutes.post(
+  '/workouts/logs/:id/undo',
+  auth([userRole.user, userRole.admin]),
+  exerciseController.undoWorkoutLog
+);
+
+exerciseRoutes.post(
+  '/workouts/logs/undo-latest',
+  auth([userRole.user, userRole.admin]),
+  exerciseController.undoLatestWorkoutLog
+);
+
+exerciseRoutes.get(
+  '/workouts/logs/:id/share',
+  auth([userRole.user, userRole.admin]),
+  exerciseController.shareWorkoutLog
+);
+
+exerciseRoutes.get(
+  '/analysis/workout',
+  auth([userRole.user, userRole.admin]),
+  exerciseController.workoutAnalysis
 );
 
 export default exerciseRoutes;

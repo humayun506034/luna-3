@@ -1,13 +1,464 @@
+// /* eslint-disable @typescript-eslint/no-explicit-any */
+// import axios from 'axios';
+// import mongoose, { Types } from 'mongoose';
+// import { EXERCISE_TYPES } from '../../constents';
+// import ApppError from '../../error/AppError';
+// import {
+//   deleteFile,
+//   uploadImgToCloudinary,
+// } from '../../util/uploadImgToCludinary';
+// import { WorkoutASetupModel } from '../user/user.model';
+// import { TExercise } from './exercise.interface';
+// import { ExerciseModel, UserExercisePerformModel } from './exercise.model';
+
+// const createCommonExercise = async (
+//   file: any,
+//   payload: Partial<TExercise>,
+//   user_id?: Types.ObjectId
+// ) => {
+//   // Validate inputs
+//   if (
+//     !payload ||
+//     !payload.name ||
+//     !payload.description ||
+//     !payload.primaryMuscleGroup ||
+//     !payload.exerciseType
+//   ) {
+//     throw new Error('Exercise name and description are required.');
+//   }
+
+//   if (!file || !file.path) {
+//     throw new Error('Image file is required.');
+//   }
+
+//   // Check MongoDB connection state
+//   if (mongoose.connection.readyState !== 1) {
+//     throw new Error('MongoDB connection is not ready.');
+//   }
+
+//   try {
+//     console.log('Starting exercise creation');
+
+//     // Upload image to Cloudinary
+//     const imageName = `${payload.name}-${Date.now()}`; // Unique name
+//     const uploadResult = await uploadImgToCloudinary(imageName, file.path);
+//     const imageUrl = uploadResult.secure_url;
+//     console.log('Image uploaded to Cloudinary:', imageUrl);
+
+//     // Create exercise payload
+//     const exercisePayload = {
+//       name: payload.name,
+//       user_id: user_id ? user_id : null,
+//       description: payload.description,
+//       img: imageUrl,
+//       primaryMuscleGroup: payload.primaryMuscleGroup,
+//       exerciseType: payload.exerciseType,
+//     };
+
+//     // Create the exercise
+//     const createdExercise = await ExerciseModel.create(exercisePayload);
+//     console.log('Exercise created:', createdExercise._id);
+
+//     return {
+//       success: true,
+//       message: 'Exercise created successfully.',
+//       data: {
+//         exercise: createdExercise,
+//       },
+//     };
+//   } catch (error: any) {
+//     console.error('Error creating exercise:', error);
+
+//     // Clean up local file if upload failed
+//     if (file && file.path) {
+//       try {
+//         await deleteFile(file.path);
+//       } catch (deleteError) {
+//         console.error('Error deleting file:', deleteError);
+//       }
+//     }
+
+//     throw new Error(
+//       error.message || 'Failed to create exercise due to an internal error.'
+//     );
+//   }
+// };
+
+// const createPersonalizeExercise = async (
+//   file: any,
+//   payLoad: Partial<TExercise>,
+//   User_id: Types.ObjectId
+// ) => {
+//   const result = await createCommonExercise(file, payLoad, User_id);
+//   return result;
+// };
+
+// const getExerciseBothCommonAndPersonalize = async (
+//   user_id: Types.ObjectId
+// ): Promise<TExercise[]> => {
+//   // Validate user_id
+//   if (!Types.ObjectId.isValid(user_id)) {
+//     throw new Error('Invalid user ID.');
+//   }
+
+//   // Check MongoDB connection state
+//   if (mongoose.connection.readyState !== 1) {
+//     throw new Error('MongoDB connection is not ready.');
+//   }
+
+//   try {
+//     // Fetch exercises, sorting personalized (user_id matches) first, then common (user_id: null)
+//     const exercises = await ExerciseModel.find({
+//       $or: [{ user_id: user_id }, { user_id: null }],
+//     })
+//       .sort({ user_id: -1 }) // Sort user_id desc: non-null (personalized) first, null last
+//       .lean(); // Return plain objects for performance
+
+//     return exercises;
+//   } catch (error: any) {
+//     console.error('Error fetching exercises:', error);
+//     throw new Error('Failed to retrieve exercises.');
+//   }
+// };
+
+// const getExerciseById = async (exercise_id: Types.ObjectId) => {
+//   // Validate exercise_id
+//   if (!Types.ObjectId.isValid(exercise_id)) {
+//     throw new Error('Invalid exercise ID.');
+//   }
+
+//   // Check MongoDB connection
+//   if (mongoose.connection.readyState !== 1) {
+//     throw new Error('MongoDB connection is not ready.');
+//   }
+
+//   try {
+//     // Find exercise
+//     const findExercise = await ExerciseModel.findOne({
+//       _id: exercise_id,
+//     }).lean();
+//     if (!findExercise) {
+//       throw new Error('Exercise not found.');
+//     }
+
+//     // Define common metadata
+//     const meta = {
+//       set: 'required',
+//       reps: 'required',
+//       resetTime: 'required',
+//     };
+
+//     // Determine modifyFoundData based on exerciseType
+//     let modifyFoundData = {};
+//     if (findExercise.exerciseType === EXERCISE_TYPES.weight_training) {
+//       modifyFoundData = { weightLifted: 'required', ...meta };
+//     } else if (
+//       findExercise.exerciseType === EXERCISE_TYPES.bodyweight_exercises ||
+//       findExercise.exerciseType === EXERCISE_TYPES.high_Intensity ||
+//       findExercise.exerciseType === EXERCISE_TYPES.strength_Training
+//     ) {
+//       modifyFoundData = { weightLifted: 'optional', ...meta };
+//     } else {
+//       modifyFoundData = { weightLifted: 'false', ...meta };
+//     }
+
+//     // Return merged data
+//     return { ...findExercise, ...modifyFoundData };
+//   } catch (error: any) {
+//     console.error('Error fetching exercise:', error);
+//     throw new Error(error.message || 'Failed to retrieve exercise.');
+//   }
+// };
+
+// //user exercise perform
+
+// const performExercise = async (
+//   user_id: Types.ObjectId,
+//   payLoad: Partial<{
+//     exercise_id: Types.ObjectId;
+//     set: number;
+//     weightLifted?: number;
+//     reps: number;
+//     timeToPerform?: number;
+//     resetTime: number;
+//     isCompleted: boolean;
+//     totalCaloryBurn?: number;
+//     distance?: number;
+//   }>
+// ) => {
+//   // Find user
+//   const user = await WorkoutASetupModel.findOne({ user_id }).lean();
+//   if (!user) {
+//     throw new Error('User not found');
+//   }
+
+//   // Validate user_id
+//   if (!Types.ObjectId.isValid(user_id)) {
+//     throw new Error('Invalid user ID');
+//   }
+
+//   // Validate required payload fields
+//   if (
+//     !payLoad.exercise_id ||
+//     payLoad.set == null ||
+//     payLoad.reps == null ||
+//     payLoad.resetTime == null
+//   ) {
+//     throw new Error('exercise_id, set, reps, and resetTime are required');
+//   }
+
+//   // Validate exercise_id
+//   if (!Types.ObjectId.isValid(payLoad.exercise_id as Types.ObjectId)) {
+//     throw new Error('Invalid exercise ID');
+//   }
+
+//   // Check MongoDB connection
+//   if (mongoose.connection.readyState !== 1) {
+//     throw new Error('MongoDB connection is not ready');
+//   }
+
+//   try {
+//     // Find exercise
+//     const findExercise = await ExerciseModel.findOne({
+//       _id: payLoad.exercise_id,
+//     }).lean();
+//     if (!findExercise) {
+//       throw new Error('Exercise not found');
+//     }
+
+//     // Validate weightLifted based on exerciseType
+//     let validatedWeightLifted: number = payLoad.weightLifted ?? 0;
+//     let distance: number | undefined = undefined;
+
+//     if (findExercise.exerciseType === 'weight_training') {
+//       if (validatedWeightLifted <= 0) {
+//         throw new Error(
+//           'weightLifted is required and must be a positive number for weight_training'
+//         );
+//       }
+//     } else if (findExercise.exerciseType === 'cardio') {
+//       validatedWeightLifted = 0;
+//       if (!payLoad.distance) {
+//         throw new ApppError(400, 'distance is required for cardio exercise');
+//       }
+//       distance = payLoad.distance;
+//     } else if (
+//       findExercise.exerciseType === 'bodyweight_exercises' ||
+//       findExercise.exerciseType === 'high_Intensity' ||
+//       findExercise.exerciseType === 'strength_Training'
+//     ) {
+//       // weightLifted is optional; keep as is
+//     } else {
+//       // For cardio, stretching, balance_Training, set weightLifted to 0
+//       validatedWeightLifted = 0;
+//     }
+
+//     // Prepare data to save
+//     const exercisePerformData = {
+//       exercise_id: payLoad.exercise_id,
+//       user_id,
+//       set: payLoad.set,
+//       weightLifted: validatedWeightLifted,
+//       reps: payLoad.reps,
+//       ...(distance !== undefined && { distance }),
+//       // timeToPerform: payLoad.timeToPerform,
+//       resetTime: payLoad.resetTime,
+//       isCompleted: false,
+//       ...(payLoad.timeToPerform !== undefined && {
+//         timeToPerform: payLoad.timeToPerform,
+//       }),
+//       ...(payLoad.distance !== undefined && { distance }),
+//     };
+
+//     // Save to UserExercisePerformModel
+//     const savedExercisePerform =
+//       await UserExercisePerformModel.create(exercisePerformData);
+
+//     return savedExercisePerform;
+//   } catch (error: any) {
+//     console.error('Error creating user exercise perform:', error);
+//     throw new Error(error.message || 'Failed to create user exercise perform');
+//   }
+// };
+
+// const markExerciseAsCompleated = async (
+//   user_id: Types.ObjectId,
+//   Performed_exercise_id: Types.ObjectId
+// ) => {
+//   try {
+//     // Validate inputs
+//     if (!Types.ObjectId.isValid(user_id)) {
+//       throw new Error('Invalid user ID');
+//     }
+//     if (!Types.ObjectId.isValid(Performed_exercise_id)) {
+//       throw new Error('Invalid performed exercise ID');
+//     }
+
+//     // Find user
+//     const user = await WorkoutASetupModel.findOne({ user_id }).lean();
+//     if (!user) {
+//       throw new Error('User not found');
+//     }
+
+//     // Find performed exercise
+//     const performedExercise = await UserExercisePerformModel.findOne({
+//       _id: Performed_exercise_id,
+//       user_id,
+//     }).lean();
+//     if (!performedExercise) {
+//       throw new Error('Performed exercise not found');
+//     }
+
+//     // Find exercise details
+//     const exercise = await ExerciseModel.findOne({
+//       _id: performedExercise.exercise_id,
+//     }).lean();
+//     if (!exercise) {
+//       throw new Error('Exercise not found');
+//     }
+
+//     // Prepare data for calorie calculation AI route
+//     const dataForCaloryCount = {
+//       height: user.height,
+//       body_weight: user.weight,
+//       exerciseName: exercise.name,
+//       exerciseType: exercise.exerciseType,
+//       exerciseDescription: exercise.description,
+//       weightLifted: performedExercise.weightLifted,
+//       reps: performedExercise.reps,
+//       sets: performedExercise.set,
+//       resetTime: performedExercise.resetTime,
+//       restTime: performedExercise.resetTime,
+//       distance: performedExercise.distance ?? 0,
+//     };
+
+//     console.log('Data for calorie count:', dataForCaloryCount);
+
+//     // Call AI API
+//     let totalCaloryBurn = 0;
+//     try {
+//       const response = await axios.post(
+//         `${process.env.AI_BASE_URL}workout-calorie/calculate-calories`,
+//         dataForCaloryCount,
+//         {
+//           headers: {
+//             'Content-Type': 'application/json',
+//           },
+//           // timeout: 10000
+//         }
+//       );
+
+//       console.log('AI API response:', response.data);
+
+//       if (
+//         !response.data ||
+//         typeof response.data.total_calories_burned !== 'number'
+//       ) {
+//         throw new Error('Invalid response from calorie AI API');
+//       }
+
+//       totalCaloryBurn = response.data.total_calories_burned;
+//     } catch (apiError: any) {
+//       console.error(
+//         'AI API error detail:',
+//         apiError.response?.data || apiError.message
+//       );
+//       throw new Error(
+//         'Failed to calculate calories from AI API: ' +
+//           (apiError.response?.data?.message || apiError.message)
+//       );
+//     }
+
+//     // Update exercise as completed with calorie burn
+//     const markAsDone = await UserExercisePerformModel.findOneAndUpdate(
+//       { _id: Performed_exercise_id, user_id },
+//       { isCompleted: true, totalCaloryBurn },
+//       { new: true }
+//     );
+
+//     if (!markAsDone) {
+//       throw new Error('Failed to mark exercise as completed');
+//     }
+
+//     return markAsDone;
+//   } catch (error: any) {
+//     console.error(
+//       `Error marking exercise as completed for user ${user_id}:`,
+//       error
+//     );
+//     throw new Error(error.message || 'Failed to mark exercise as completed');
+//   }
+// };
+
+// const getPerformedExerciseById = async (
+//   id: Types.ObjectId,
+//   userId: Types.ObjectId
+// ) => {
+//   const exercise = await UserExercisePerformModel.findOne({
+//     user_id: userId,
+//     _id: id,
+//   }).lean();
+
+//   return exercise;
+// };
+
+// const getAllPerformedExercise = async (userId: Types.ObjectId) => {
+//   const exercises = await UserExercisePerformModel.find({
+//     user_id: userId,
+//   }).lean();
+
+//   return exercises;
+// };
+
+// const deleteExercise = async (
+//   exerciseId: Types.ObjectId,
+//   userId: Types.ObjectId
+// ) => {
+//   // Validate exercise ID
+//   if (!Types.ObjectId.isValid(exerciseId)) {
+//     throw new Error('Invalid exercise ID');
+//   }
+
+//   // Find the exercise
+//   const exercise = await ExerciseModel.findOne({ _id: exerciseId });
+//   if (!exercise) {
+//     throw new Error('Exercise not found');
+//   }
+
+//   // Only the owner or admin can delete
+//   if (exercise.user_id && !exercise.user_id.equals(userId)) {
+//     throw new Error('Not authorized to delete this exercise');
+//   }
+
+//   // Delete the exercise
+//   await ExerciseModel.findByIdAndDelete(exerciseId);
+
+//   return { success: true, message: 'Exercise deleted successfully' };
+// };
+
+// const exerciseServicves = {
+//   createCommonExercise,
+//   createPersonalizeExercise,
+//   getExerciseBothCommonAndPersonalize,
+//   getExerciseById,
+//   performExercise,
+//   markExerciseAsCompleated,
+//   deleteExercise,
+//   getPerformedExerciseById,
+//   getAllPerformedExercise,
+// };
+// export default exerciseServicves;
+
 /* eslint-disable @typescript-eslint/no-explicit-any */
 import axios from 'axios';
-import mongoose, { Types } from 'mongoose';
+import mongoose, { ObjectId, Types } from 'mongoose';
 import { EXERCISE_TYPES } from '../../constents';
 import ApppError from '../../error/AppError';
 import {
   deleteFile,
   uploadImgToCloudinary,
 } from '../../util/uploadImgToCludinary';
-import { WorkoutASetupModel } from '../user/user.model';
+import { UserModel, WorkoutASetupModel } from '../user/user.model';
 import { TExercise } from './exercise.interface';
 import { ExerciseModel, UserExercisePerformModel } from './exercise.model';
 
@@ -16,7 +467,6 @@ const createCommonExercise = async (
   payload: Partial<TExercise>,
   user_id?: Types.ObjectId
 ) => {
-  // Validate inputs
   if (
     !payload ||
     !payload.name ||
@@ -31,51 +481,32 @@ const createCommonExercise = async (
     throw new Error('Image file is required.');
   }
 
-  // Check MongoDB connection state
   if (mongoose.connection.readyState !== 1) {
     throw new Error('MongoDB connection is not ready.');
   }
 
   try {
-    console.log('Starting exercise creation');
-
-    // Upload image to Cloudinary
-    const imageName = `${payload.name}-${Date.now()}`; // Unique name
+    const imageName = `${payload.name}-${Date.now()}`;
     const uploadResult = await uploadImgToCloudinary(imageName, file.path);
     const imageUrl = uploadResult.secure_url;
-    console.log('Image uploaded to Cloudinary:', imageUrl);
 
-    // Create exercise payload
     const exercisePayload = {
       name: payload.name,
-      user_id: user_id ? user_id : null,
+      user_id: user_id,
       description: payload.description,
       img: imageUrl,
       primaryMuscleGroup: payload.primaryMuscleGroup,
       exerciseType: payload.exerciseType,
     };
 
-    // Create the exercise
     const createdExercise = await ExerciseModel.create(exercisePayload);
-    console.log('Exercise created:', createdExercise._id);
 
-    return {
-      success: true,
-      message: 'Exercise created successfully.',
-      data: {
-        exercise: createdExercise,
-      },
-    };
+    return createdExercise;
   } catch (error: any) {
-    console.error('Error creating exercise:', error);
-
-    // Clean up local file if upload failed
     if (file && file.path) {
       try {
         await deleteFile(file.path);
-      } catch (deleteError) {
-        console.error('Error deleting file:', deleteError);
-      }
+      } catch {}
     }
 
     throw new Error(
@@ -96,59 +527,51 @@ const createPersonalizeExercise = async (
 const getExerciseBothCommonAndPersonalize = async (
   user_id: Types.ObjectId
 ): Promise<TExercise[]> => {
-  // Validate user_id
   if (!Types.ObjectId.isValid(user_id)) {
     throw new Error('Invalid user ID.');
   }
 
-  // Check MongoDB connection state
   if (mongoose.connection.readyState !== 1) {
     throw new Error('MongoDB connection is not ready.');
   }
 
   try {
-    // Fetch exercises, sorting personalized (user_id matches) first, then common (user_id: null)
     const exercises = await ExerciseModel.find({
       $or: [{ user_id: user_id }, { user_id: null }],
     })
-      .sort({ user_id: -1 }) // Sort user_id desc: non-null (personalized) first, null last
-      .lean(); // Return plain objects for performance
+      .sort({ user_id: -1 })
+      .lean();
 
     return exercises;
-  } catch (error: any) {
-    console.error('Error fetching exercises:', error);
+  } catch {
     throw new Error('Failed to retrieve exercises.');
   }
 };
 
 const getExerciseById = async (exercise_id: Types.ObjectId) => {
-  // Validate exercise_id
   if (!Types.ObjectId.isValid(exercise_id)) {
     throw new Error('Invalid exercise ID.');
   }
 
-  // Check MongoDB connection
   if (mongoose.connection.readyState !== 1) {
     throw new Error('MongoDB connection is not ready.');
   }
 
   try {
-    // Find exercise
     const findExercise = await ExerciseModel.findOne({
       _id: exercise_id,
     }).lean();
+
     if (!findExercise) {
       throw new Error('Exercise not found.');
     }
 
-    // Define common metadata
     const meta = {
       set: 'required',
       reps: 'required',
       resetTime: 'required',
     };
 
-    // Determine modifyFoundData based on exerciseType
     let modifyFoundData = {};
     if (findExercise.exerciseType === EXERCISE_TYPES.weight_training) {
       modifyFoundData = { weightLifted: 'required', ...meta };
@@ -162,15 +585,118 @@ const getExerciseById = async (exercise_id: Types.ObjectId) => {
       modifyFoundData = { weightLifted: 'false', ...meta };
     }
 
-    // Return merged data
     return { ...findExercise, ...modifyFoundData };
   } catch (error: any) {
-    console.error('Error fetching exercise:', error);
     throw new Error(error.message || 'Failed to retrieve exercise.');
   }
 };
 
-//user exercise perform
+// const performExercise = async (
+//   user_id: Types.ObjectId,
+//   payLoad: Partial<{
+//     exercise_id: Types.ObjectId;
+//     set: number;
+//     weightLifted?: number;
+//     reps: number;
+//     timeToPerform?: number;
+//     resetTime: number;
+//     isCompleted: boolean;
+//     totalCaloryBurn?: number;
+//     distance?: number;
+//   }>
+// ) => {
+//   const user = await UserModel.findById(user_id).lean();
+//   if (!user) {
+//     throw new Error('User not found');
+//   }
+
+//   console.log({user})
+
+//   console.log({payLoad})
+// const exerciseId = payLoad.exercise_id as any;
+
+// // Convert string to ObjectId
+// if (!mongoose.Types.ObjectId.isValid(exerciseId)) {
+//   console.log("Invalid exercise_id");
+// } else {
+//   const isTheExerciseExist = await ExerciseModel.findOne({ _id:new Types.ObjectId(exerciseId) })
+//   console.log({isTheExerciseExist})
+
+//   if (!isTheExerciseExist) {
+//     console.log("Exercise not found");
+//   }
+// }
+
+ 
+
+//   if (
+//     !payLoad.exercise_id ||
+//     payLoad.set == null ||
+//     payLoad.reps == null ||
+//     payLoad.resetTime == null
+//   ) {
+//     throw new Error('exercise_id, set, reps, and resetTime are required');
+//   }
+
+//   if (!Types.ObjectId.isValid(payLoad.exercise_id as Types.ObjectId)) {
+//     throw new Error('Invalid exercise ID');
+//   }
+
+//   if (mongoose.connection.readyState !== 1) {
+//     throw new Error('MongoDB connection is not ready');
+//   }
+
+//   try {
+//     const findExercise = await ExerciseModel.findOne({
+//       _id: payLoad.exercise_id,
+//     }).lean();
+//     if (!findExercise) {
+//       throw new Error('Exercise not found');
+//     }
+
+//     let validatedWeightLifted: number = payLoad.weightLifted ?? 0;
+//     let distance: number | undefined = undefined;
+
+//     if (findExercise.exerciseType === 'weight_training') {
+//       if (validatedWeightLifted <= 0) {
+//         throw new Error(
+//           'weightLifted is required and must be a positive number for weight_training'
+//         );
+//       }
+//     } else if (findExercise.exerciseType === 'cardio') {
+//       validatedWeightLifted = 0;
+//       if (!payLoad.distance) {
+//         throw new ApppError(400, 'distance is required for cardio exercise');
+//       }
+//       distance = payLoad.distance;
+//     }
+
+//     const exercisePerformData = {
+//       exercise_id: payLoad.exercise_id,
+//       user_id,
+//       set: payLoad.set,
+//       weightLifted: validatedWeightLifted,
+//       reps: payLoad.reps,
+//       ...(distance !== undefined && { distance }),
+//       resetTime: payLoad.resetTime,
+//       isCompleted: false,
+//       ...(payLoad.timeToPerform !== undefined && {
+//         timeToPerform: payLoad.timeToPerform,
+//       }),
+//       ...(payLoad.distance !== undefined && { distance: payLoad.distance }),
+//       totalCaloryBurn: payLoad.totalCaloryBurn ?? 0,
+//     };
+
+//     const savedExercisePerform =
+//       await UserExercisePerformModel.create(exercisePerformData);
+
+//     return savedExercisePerform;
+//   } catch (error: any) {
+//     throw new Error(error.message || 'Failed to create user exercise perform');
+//   }
+// };
+
+
 
 const performExercise = async (
   user_id: Types.ObjectId,
@@ -184,109 +710,121 @@ const performExercise = async (
     isCompleted: boolean;
     totalCaloryBurn?: number;
     distance?: number;
+    note?: string;
+    image?: string;
   }>
 ) => {
-  // Find user
-  const user = await WorkoutASetupModel.findOne({ user_id }).lean();
-  if (!user) {
-    throw new Error('User not found');
-  }
-
-  // Validate user_id
-  if (!Types.ObjectId.isValid(user_id)) {
-    throw new Error('Invalid user ID');
-  }
-
-  // Validate required payload fields
-  if (
-    !payLoad.exercise_id ||
-    payLoad.set == null ||
-    payLoad.reps == null ||
-    payLoad.resetTime == null
-  ) {
-    throw new Error('exercise_id, set, reps, and resetTime are required');
-  }
-
-  // Validate exercise_id
-  if (!Types.ObjectId.isValid(payLoad.exercise_id as Types.ObjectId)) {
-    throw new Error('Invalid exercise ID');
-  }
-
-  // Check MongoDB connection
+  // Validate MongoDB connection
   if (mongoose.connection.readyState !== 1) {
-    throw new Error('MongoDB connection is not ready');
+    throw new ApppError(500, 'MongoDB connection is not ready');
   }
 
+  // Validate required fields
+  if (!payLoad.exercise_id || payLoad.set == null || payLoad.reps == null || payLoad.resetTime == null) {
+    throw new ApppError(400, 'exercise_id, set, reps, and resetTime are required');
+  }
+
+  // Validate exercise_id format
+  if (!Types.ObjectId.isValid(payLoad.exercise_id)) {
+    throw new ApppError(400, 'Invalid exercise ID');
+  }
+
+  // Find user in database
+  const user = await UserModel.findById(user_id).lean();
+  if (!user) {
+    throw new ApppError(404, 'User not found');
+  }
+
+  // Find exercise in database
+  const exerciseId = payLoad.exercise_id;
+  const exercise = await ExerciseModel.findOne({ _id: exerciseId }).lean();
+  if (!exercise) {
+    throw new ApppError(404, 'Exercise not found');
+  }
+
+  // Validate weightLifted or distance based on exercise type
+  let validatedWeightLifted: number = payLoad.weightLifted ?? 0;
+  let distance: number | undefined = undefined;
+
+  if (exercise.exerciseType === 'weight_training') {
+    if (validatedWeightLifted <= 0) {
+      throw new ApppError(400, 'weightLifted must be a positive number for weight_training');
+    }
+  } else if (exercise.exerciseType === 'cardio') {
+    validatedWeightLifted = 0;
+    if (!payLoad.distance) {
+      throw new ApppError(400, 'distance is required for cardio exercise');
+    }
+    distance = payLoad.distance;
+  }
+
+  // Prepare exercise data for save
+  // const exercisePerformData = {
+  //   exercise_id: payLoad.exercise_id,
+  //   user_id,
+  //   set: payLoad.set,
+  //   weightLifted: validatedWeightLifted,
+  //   reps: payLoad.reps,
+  //   resetTime: payLoad.resetTime,
+  //   isCompleted: false, // Assuming the exercise isn't completed at the moment of creation
+  //   totalCaloryBurn: payLoad.totalCaloryBurn ?? 0,
+  //   ...(distance !== undefined && { distance }),
+  //   ...(payLoad.timeToPerform !== undefined && { timeToPerform: payLoad.timeToPerform }),
+  // };
+
+  const exercisePerformData = {
+  exercise_id: payLoad.exercise_id,
+  user_id,
+  set: payLoad.set,
+  weightLifted: validatedWeightLifted,
+  reps: payLoad.reps,
+  resetTime: payLoad.resetTime,
+  isCompleted: false,
+  note: payLoad.note,
+  image:exercise.img,
+  totalCaloryBurn: payLoad.totalCaloryBurn ?? 0,
+  ...(distance !== undefined && { distance }),
+  ...(payLoad.timeToPerform !== undefined && { timeToPerform: payLoad.timeToPerform }),
+
+  // add this
+  isDeleted: false,
+  history: [
+    {
+      action: 'create',
+      before: null,
+      after: {
+        exercise_id: payLoad.exercise_id,
+        user_id,
+        set: payLoad.set,
+        weightLifted: validatedWeightLifted,
+        reps: payLoad.reps,
+        resetTime: payLoad.resetTime,
+        totalCaloryBurn: payLoad.totalCaloryBurn ?? 0,
+        ...(distance !== undefined && { distance }),
+        ...(payLoad.timeToPerform !== undefined && { timeToPerform: payLoad.timeToPerform }),
+      },
+      undone: false,
+      createdAt: new Date(),
+    },
+  ],
+};
+
+
+  // Save exercise perform data
   try {
-    // Find exercise
-    const findExercise = await ExerciseModel.findOne({
-      _id: payLoad.exercise_id,
-    }).lean();
-    if (!findExercise) {
-      throw new Error('Exercise not found');
-    }
-
-    // Validate weightLifted based on exerciseType
-    let validatedWeightLifted: number = payLoad.weightLifted ?? 0;
-    let distance: number | undefined = undefined;
-
-    if (findExercise.exerciseType === 'weight_training') {
-      if (validatedWeightLifted <= 0) {
-        throw new Error(
-          'weightLifted is required and must be a positive number for weight_training'
-        );
-      }
-    } else if (findExercise.exerciseType === 'cardio') {
-      validatedWeightLifted = 0;
-      if (!payLoad.distance) {
-        throw new ApppError(400, 'distance is required for cardio exercise');
-      }
-      distance = payLoad.distance;
-    } else if (
-      findExercise.exerciseType === 'bodyweight_exercises' ||
-      findExercise.exerciseType === 'high_Intensity' ||
-      findExercise.exerciseType === 'strength_Training'
-    ) {
-      // weightLifted is optional; keep as is
-    } else {
-      // For cardio, stretching, balance_Training, set weightLifted to 0
-      validatedWeightLifted = 0;
-    }
-
-    // Prepare data to save
-    const exercisePerformData = {
-      exercise_id: payLoad.exercise_id,
-      user_id,
-      set: payLoad.set,
-      weightLifted: validatedWeightLifted,
-      reps: payLoad.reps,
-      ...(distance !== undefined && { distance }),
-      // timeToPerform: payLoad.timeToPerform,
-      resetTime: payLoad.resetTime,
-      isCompleted: false,
-      ...(payLoad.timeToPerform !== undefined && {
-        timeToPerform: payLoad.timeToPerform,
-      }),
-      ...(payLoad.distance !== undefined && { distance }),
-    };
-
-    // Save to UserExercisePerformModel
-    const savedExercisePerform =
-      await UserExercisePerformModel.create(exercisePerformData);
-
+    const savedExercisePerform = await UserExercisePerformModel.create(exercisePerformData);
     return savedExercisePerform;
   } catch (error: any) {
-    console.error('Error creating user exercise perform:', error);
-    throw new Error(error.message || 'Failed to create user exercise perform');
+    throw new ApppError(500, error.message || 'Failed to create user exercise perform');
   }
 };
+
 
 const markExerciseAsCompleated = async (
   user_id: Types.ObjectId,
   Performed_exercise_id: Types.ObjectId
 ) => {
   try {
-    // Validate inputs
     if (!Types.ObjectId.isValid(user_id)) {
       throw new Error('Invalid user ID');
     }
@@ -294,13 +832,11 @@ const markExerciseAsCompleated = async (
       throw new Error('Invalid performed exercise ID');
     }
 
-    // Find user
     const user = await WorkoutASetupModel.findOne({ user_id }).lean();
     if (!user) {
       throw new Error('User not found');
     }
 
-    // Find performed exercise
     const performedExercise = await UserExercisePerformModel.findOne({
       _id: Performed_exercise_id,
       user_id,
@@ -309,7 +845,6 @@ const markExerciseAsCompleated = async (
       throw new Error('Performed exercise not found');
     }
 
-    // Find exercise details
     const exercise = await ExerciseModel.findOne({
       _id: performedExercise.exercise_id,
     }).lean();
@@ -317,7 +852,6 @@ const markExerciseAsCompleated = async (
       throw new Error('Exercise not found');
     }
 
-    // Prepare data for calorie calculation AI route
     const dataForCaloryCount = {
       height: user.height,
       body_weight: user.weight,
@@ -332,9 +866,6 @@ const markExerciseAsCompleated = async (
       distance: performedExercise.distance ?? 0,
     };
 
-    console.log('Data for calorie count:', dataForCaloryCount);
-
-    // Call AI API
     let totalCaloryBurn = 0;
     try {
       const response = await axios.post(
@@ -344,11 +875,8 @@ const markExerciseAsCompleated = async (
           headers: {
             'Content-Type': 'application/json',
           },
-          // timeout: 10000
         }
       );
-
-      console.log('AI API response:', response.data);
 
       if (
         !response.data ||
@@ -359,17 +887,12 @@ const markExerciseAsCompleated = async (
 
       totalCaloryBurn = response.data.total_calories_burned;
     } catch (apiError: any) {
-      console.error(
-        'AI API error detail:',
-        apiError.response?.data || apiError.message
-      );
       throw new Error(
         'Failed to calculate calories from AI API: ' +
           (apiError.response?.data?.message || apiError.message)
       );
     }
 
-    // Update exercise as completed with calorie burn
     const markAsDone = await UserExercisePerformModel.findOneAndUpdate(
       { _id: Performed_exercise_id, user_id },
       { isCompleted: true, totalCaloryBurn },
@@ -382,10 +905,6 @@ const markExerciseAsCompleated = async (
 
     return markAsDone;
   } catch (error: any) {
-    console.error(
-      `Error marking exercise as completed for user ${user_id}:`,
-      error
-    );
     throw new Error(error.message || 'Failed to mark exercise as completed');
   }
 };
@@ -414,26 +933,287 @@ const deleteExercise = async (
   exerciseId: Types.ObjectId,
   userId: Types.ObjectId
 ) => {
-  // Validate exercise ID
   if (!Types.ObjectId.isValid(exerciseId)) {
     throw new Error('Invalid exercise ID');
   }
 
-  // Find the exercise
   const exercise = await ExerciseModel.findOne({ _id: exerciseId });
   if (!exercise) {
     throw new Error('Exercise not found');
   }
 
-  // Only the owner or admin can delete
   if (exercise.user_id && !exercise.user_id.equals(userId)) {
     throw new Error('Not authorized to delete this exercise');
   }
 
-  // Delete the exercise
   await ExerciseModel.findByIdAndDelete(exerciseId);
 
   return { success: true, message: 'Exercise deleted successfully' };
+};
+
+// workout logs (newWorkout style) on existing model
+const workoutLogs = {
+  create: async (
+    user_id: Types.ObjectId,
+    payload: any,
+    file?: Express.Multer.File
+  ) => {
+    let image = payload.image ?? '';
+
+    if (file?.path) {
+      try {
+        const imageName = `${payload.exerciseName ?? 'workout'}-${Date.now()}`;
+        const uploadResult = await uploadImgToCloudinary(imageName, file.path);
+        image = uploadResult.secure_url;
+      } catch (error) {
+        await deleteFile(file.path);
+        throw error;
+      }
+    }
+
+    const doc = await UserExercisePerformModel.create({
+      exercise_id: payload.exercise_id,
+      user_id,
+      set: payload.set ?? 1,
+      weightLifted: payload.weightLifted ?? 0,
+      reps: payload.reps ?? 1,
+      distance: payload.distance ?? 0,
+      timeToPerform: payload.timeToPerform,
+      resetTime: payload.resetTime ?? 0,
+      isCompleted: payload.isCompleted ?? false,
+      totalCaloryBurn: payload.totalCaloryBurn ?? 0,
+      image,
+      note: payload.note ?? '',
+      isDeleted: false,
+      history: [
+        {
+          action: 'create',
+          before: null,
+          after: payload,
+          undone: false,
+          createdAt: new Date(),
+        },
+      ],
+    } as any);
+
+    return doc;
+  },
+
+  update: async (
+    user_id: Types.ObjectId,
+    id: string,
+    payload: any,
+    file?: Express.Multer.File
+  ) => {
+    const prev = await UserExercisePerformModel.findOne({
+      _id: id,
+      user_id,
+      isDeleted: false,
+    } as any);
+
+    if (!prev) throw new Error('Workout log not found');
+
+    const before = prev.toObject();
+
+    if (file?.path) {
+      try {
+        const imageName = `${payload.exerciseName ?? 'workout'}-${Date.now()}`;
+        const uploadResult = await uploadImgToCloudinary(imageName, file.path);
+        payload.image = uploadResult.secure_url;
+      } catch (error) {
+        await deleteFile(file.path);
+        throw error;
+      }
+    }
+
+    Object.assign(prev, payload);
+
+    const existingHistory = ((prev as any).history ?? []) as any[];
+    (prev as any).history = [
+      ...existingHistory,
+      {
+        action: 'update',
+        before,
+        after: prev.toObject(),
+        undone: false,
+        createdAt: new Date(),
+      },
+    ];
+
+    await prev.save();
+    return prev;
+  },
+
+  list: async (user_id: Types.ObjectId) => {
+    return UserExercisePerformModel.find({
+      user_id,
+      isDeleted: false,
+    } as any).sort({ createdAt: -1 });
+  },
+
+  remove: async (user_id: Types.ObjectId, id: string) => {
+    const prev = await UserExercisePerformModel.findOne({
+      _id: id,
+      user_id,
+      isDeleted: false,
+    } as any);
+
+    if (!prev) throw new Error('Workout log not found');
+
+    const before = prev.toObject();
+    (prev as any).isDeleted = true;
+
+    const existingHistory = ((prev as any).history ?? []) as any[];
+    (prev as any).history = [
+      ...existingHistory,
+      {
+        action: 'delete',
+        before,
+        after: null,
+        undone: false,
+        createdAt: new Date(),
+      },
+    ];
+
+    await prev.save();
+    return { success: true };
+  },
+
+  undo: async (user_id: Types.ObjectId, id: string) => {
+    const doc = await UserExercisePerformModel.findOne({
+      _id: id,
+      user_id,
+    } as any);
+
+    if (!doc) throw new Error('Workout log not found');
+
+    const history = [...(((doc as any).history ?? []) as any[])].reverse();
+    const last = history.find((h) => !h.undone);
+
+    if (!last) throw new Error('No undoable action found');
+
+    if (last.action === 'create') (doc as any).isDeleted = true;
+    if (last.action === 'delete') (doc as any).isDeleted = false;
+    if (last.action === 'update' && last.before) {
+      Object.assign(doc, last.before);
+    }
+
+    const originalHistory = (((doc as any).history ?? []) as any[]).map((h) => {
+      if (
+        h.createdAt?.toString?.() === last.createdAt?.toString?.() &&
+        h.action === last.action &&
+        !h.undone
+      ) {
+        return { ...h, undone: true };
+      }
+      return h;
+    });
+
+    (doc as any).history = originalHistory;
+    await doc.save();
+
+    return { success: true };
+  },
+
+  undoLatest: async (user_id: Types.ObjectId) => {
+    const docs = await UserExercisePerformModel.find({ user_id } as any).sort({
+      updatedAt: -1,
+    });
+
+    for (const doc of docs) {
+      const currentHistory = ((doc as any).history ?? []) as Array<{
+        action: 'create' | 'update' | 'delete';
+        before: Record<string, unknown> | null;
+        after: Record<string, unknown> | null;
+        undone?: boolean;
+        createdAt?: Date;
+      }>;
+
+      const reversedHistory = [...currentHistory].reverse();
+      const lastActive = reversedHistory.find((entry) => !entry.undone);
+
+      if (!lastActive) {
+        continue;
+      }
+
+      if (lastActive.action === 'create') {
+        (doc as any).isDeleted = true;
+      } else if (lastActive.action === 'delete') {
+        (doc as any).isDeleted = false;
+      } else if (lastActive.action === 'update' && lastActive.before) {
+        Object.assign(doc, lastActive.before);
+      }
+
+      const updatedHistory = currentHistory.map((entry) => {
+        const sameCreatedAt =
+          entry.createdAt?.toString() === lastActive.createdAt?.toString();
+        const sameAction = entry.action === lastActive.action;
+
+        if (sameCreatedAt && sameAction && !entry.undone) {
+          return { ...entry, undone: true };
+        }
+
+        return entry;
+      });
+
+      (doc as any).history = updatedHistory;
+      await doc.save();
+
+      return { success: true };
+    }
+
+    throw new Error('No undoable action found');
+  },
+
+  share: async (user_id: Types.ObjectId, id: string) => {
+    const log = await UserExercisePerformModel.findOne({
+      _id: id,
+      user_id,
+      isDeleted: false,
+    } as any).lean();
+
+    if (!log) throw new Error('Workout log not found');
+
+    return {
+      type: 'workout',
+      title: 'Workout Progress',
+      caption: `${log.set} sets x ${log.reps} reps`,
+      stats: {
+        set: log.set,
+        reps: log.reps,
+        weightLifted: log.weightLifted,
+        totalCaloryBurn: log.totalCaloryBurn,
+      },
+    };
+  },
+
+  analysis: async (
+    user_id: Types.ObjectId,
+    timeSpan: '3m' | '6m' | '12m' = '3m'
+  ) => {
+    let days = 90;
+    if (timeSpan === '6m') days = 180;
+    if (timeSpan === '12m') days = 365;
+
+    const from = new Date();
+    from.setDate(from.getDate() - days);
+
+    return UserExercisePerformModel.aggregate([
+      { $match: { user_id, isDeleted: false, createdAt: { $gte: from } } },
+      {
+        $group: {
+          _id: { $dateToString: { format: '%Y-%m-%d', date: '$createdAt' } },
+          set: { $sum: '$set' },
+          reps: { $sum: '$reps' },
+          totalCaloryBurn: { $sum: '$totalCaloryBurn' },
+        },
+      },
+      {
+        $project: { _id: 0, date: '$_id', set: 1, reps: 1, totalCaloryBurn: 1 },
+      },
+      { $sort: { date: 1 } },
+    ]);
+  },
 };
 
 const exerciseServicves = {
@@ -446,5 +1226,7 @@ const exerciseServicves = {
   deleteExercise,
   getPerformedExerciseById,
   getAllPerformedExercise,
+  workoutLogs,
 };
+
 export default exerciseServicves;
