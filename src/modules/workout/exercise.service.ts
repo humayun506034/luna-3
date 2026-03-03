@@ -594,43 +594,46 @@ const createPersonalizeExercise = async (
 };
 
 const getExerciseBothCommonAndPersonalize = async (
-  user_id: Types.ObjectId, role?:string
+  user_id: Types.ObjectId,
+  role?: string
 ) => {
   if (!Types.ObjectId.isValid(user_id)) {
     throw new Error('Invalid user ID.');
   }
 
-  console.log(role)
+  console.log(role);
 
   if (mongoose.connection.readyState !== 1) {
     throw new Error('MongoDB connection is not ready.');
   }
 
-  if(role==='admin'){
+  if (role === 'admin') {
     try {
-      const exercises = await ExerciseModel.find({}).populate({
-        path: 'user_id',
-        select: 'name email img role', // only needed fields
-      }).lean();
-  
+      const exercises = await ExerciseModel.find({})
+        .populate({
+          path: 'user_id',
+          select: 'name email img role', // only needed fields
+        })
+        .lean();
+
       return exercises;
     } catch {
       throw new Error('Failed to retrieve exercises.');
     }
-  }else if(role==='user'){
+  } else if (role === 'user') {
     try {
-      const exercises = await ExerciseModel.find({ user_id: user_id }).populate({
-        path: 'user_id',
-        select: 'name email img role', // only needed fields
-      }).lean();
-  
+      const exercises = await ExerciseModel.find({ user_id: user_id })
+        .populate({
+          path: 'user_id',
+          select: 'name email img role', // only needed fields
+        })
+        .lean();
+
       return exercises;
     } catch {
       throw new Error('Failed to retrieve exercises.');
     }
   }
-
-  
 };
 
 const getExerciseById = async (exercise_id: Types.ObjectId) => {
@@ -1050,7 +1053,10 @@ const getPerformedExerciseById = async (
   return exercise;
 };
 
-const getAllPerformedExercise = async (userId: Types.ObjectId, role?: string) => {
+const getAllPerformedExercise = async (
+  userId: Types.ObjectId,
+  role?: string
+) => {
   const exercises = await UserExercisePerformModel.find({
     user_id: userId,
     history: { $exists: true, $not: { $size: 0 } },
@@ -1083,43 +1089,203 @@ const deleteExercise = async (
 
 // workout logs (newWorkout style) on existing model
 const workoutLogs = {
+  // create: async (
+  //   user_id: Types.ObjectId,
+  //   payload: any,
+  //   file?: Express.Multer.File
+  // ) => {
+  //   let image = payload.image ?? '';
+
+  //   if (file?.path) {
+  //     try {
+  //       const imageName = `${payload.exerciseName ?? 'workout'}-${Date.now()}`;
+  //       const uploadResult = await uploadImgToCloudinary(imageName, file.path);
+  //       image = uploadResult.secure_url;
+  //     } catch (error) {
+  //       await deleteFile(file.path);
+  //       throw error;
+  //     }
+  //   }
+
+  //   const doc = await UserExercisePerformModel.create({
+  //     exercise_id: payload.exercise_id,
+  //     user_id,
+  //     set: payload.set ?? 1,
+  //     weightLifted: payload.weightLifted ?? 0,
+  //     reps: payload.reps ?? 1,
+  //     distance: payload.distance ?? 0,
+  //     timeToPerform: payload.timeToPerform,
+  //     resetTime: payload.resetTime ?? 0,
+  //     isCompleted: payload.isCompleted ?? false,
+  //     totalCaloryBurn: payload.totalCaloryBurn ?? 0,
+  //     image,
+  //     note: payload.note ?? '',
+  //     isDeleted: false,
+  //     history: [
+  //       {
+  //         action: 'create',
+  //         before: null,
+  //         after: payload,
+  //         undone: false,
+  //         createdAt: new Date(),
+  //       },
+  //     ],
+  //   } as any);
+
+  //   return doc;
+  // },
+
+  // লাগবে:
+  // import axios from 'axios';
+  // import { WorkoutASetupModel } from '../user/user.model';
+
+  // লাগবে:
+  // import axios from 'axios';
+  // import { WorkoutASetupModel } from '../user/user.model';
+
   create: async (
     user_id: Types.ObjectId,
-    payload: any,
+    payload: {
+      exercise_id?: string | Types.ObjectId;
+      set?: number;
+      reps?: number;
+      resetTime?: number;
+      weightLifted?: number;
+      distance?: number;
+      timeToPerform?: number;
+      note?: string;
+      image?: string;
+      isCompleted?: boolean;
+      totalCaloryBurn?: number; // optional manual override
+      skipCalorieCalculation?: boolean; // optional
+    },
     file?: Express.Multer.File
   ) => {
-    let image = payload.image ?? '';
+    if (mongoose.connection.readyState !== 1) {
+      throw new ApppError(500, 'MongoDB connection is not ready');
+    }
 
+    if (!payload?.exercise_id)
+      throw new ApppError(400, 'exercise_id is required');
+    if (!Types.ObjectId.isValid(payload.exercise_id)) {
+      throw new ApppError(400, 'Invalid exercise ID');
+    }
+
+    if (payload.set === undefined || payload.set <= 0) {
+      throw new ApppError(400, 'set must be a positive number');
+    }
+    if (payload.reps === undefined || payload.reps <= 0) {
+      throw new ApppError(400, 'reps must be a positive number');
+    }
+    if (payload.resetTime === undefined || payload.resetTime < 0) {
+      throw new ApppError(400, 'resetTime must be a non-negative number');
+    }
+
+    const user = await WorkoutASetupModel.findOne({ user_id }).lean();
+    if (!user) throw new ApppError(404, 'User setup not found');
+
+    const exercise = await ExerciseModel.findById(payload.exercise_id).lean();
+    if (!exercise) throw new ApppError(404, 'Exercise not found');
+
+    let validatedWeightLifted = payload.weightLifted;
+    const validatedDistance = payload.distance;
+
+    if (exercise.exerciseType === 'weight_training') {
+      if (!validatedWeightLifted || validatedWeightLifted <= 0) {
+        throw new ApppError(
+          400,
+          'weightLifted must be a positive number for weight_training'
+        );
+      }
+    } else if (exercise.exerciseType === 'cardio') {
+      if (!validatedDistance || validatedDistance <= 0) {
+        throw new ApppError(400, 'distance is required for cardio exercise');
+      }
+      validatedWeightLifted = 0;
+    }
+
+    let image = payload.image;
     if (file?.path) {
       try {
-        const imageName = `${payload.exerciseName ?? 'workout'}-${Date.now()}`;
+        const imageName = `${exercise.name ?? 'workout'}-${Date.now()}`;
         const uploadResult = await uploadImgToCloudinary(imageName, file.path);
         image = uploadResult.secure_url;
+        console.log("🚀 ~ image:", image)
       } catch (error) {
         await deleteFile(file.path);
         throw error;
       }
     }
 
-    const doc = await UserExercisePerformModel.create({
+    // calorie calculation এখানে
+    let totalCaloryBurn: number;
+    if (typeof payload.totalCaloryBurn === 'number') {
+      totalCaloryBurn = payload.totalCaloryBurn;
+    } else if (payload.skipCalorieCalculation) {
+      totalCaloryBurn = 0;
+    } else {
+      const dataForCaloryCount = {
+        height: user.height,
+        body_weight: user.weight,
+        exerciseName: exercise.name,
+        exerciseType: exercise.exerciseType,
+        exerciseDescription: exercise.description,
+        weightLifted: validatedWeightLifted ?? 0,
+        reps: payload.reps,
+        sets: payload.set,
+        resetTime: payload.resetTime,
+        restTime: payload.resetTime,
+        distance: validatedDistance ?? 0,
+      };
+
+      try {
+        const response = await axios.post(
+          `${process.env.AI_BASE_URL}workout-calorie/calculate-calories`,
+          dataForCaloryCount,
+          { headers: { 'Content-Type': 'application/json' } }
+        );
+
+        if (
+          !response.data ||
+          typeof response.data.total_calories_burned !== 'number'
+        ) {
+          throw new ApppError(502, 'Invalid response from calorie AI API');
+        }
+
+        totalCaloryBurn = response.data.total_calories_burned;
+        console.log("🚀 ~ totalCaloryBurn:", totalCaloryBurn)
+      } catch (apiError: any) {
+        throw new ApppError(
+          502,
+          'Failed to calculate calories from AI API: ' +
+            (apiError.response?.data?.message || apiError.message)
+        );
+      }
+    }
+
+    const createData: Record<string, unknown> = {
       exercise_id: payload.exercise_id,
       user_id,
-      set: payload.set ?? 1,
-      weightLifted: payload.weightLifted ?? 0,
-      reps: payload.reps ?? 1,
-      distance: payload.distance ?? 0,
-      timeToPerform: payload.timeToPerform,
-      resetTime: payload.resetTime ?? 0,
-      isCompleted: payload.isCompleted ?? false,
-      totalCaloryBurn: payload.totalCaloryBurn ?? 0,
-      image,
-      note: payload.note ?? '',
+      set: payload.set,
+      reps: payload.reps,
+      resetTime: payload.resetTime,
+      weightLifted: validatedWeightLifted,
+      ...(validatedDistance !== undefined && { distance: validatedDistance }),
+      ...(payload.timeToPerform !== undefined && { timeToPerform: payload.timeToPerform }),
+      ...(payload.isCompleted !== undefined && { isCompleted: payload.isCompleted }),
+      ...(payload.note !== undefined && { note: payload.note }),
+      ...(image !== undefined && { image }),
+      totalCaloryBurn,
       isDeleted: false,
+    };
+
+    const doc = await UserExercisePerformModel.create({
+      ...createData,
       history: [
         {
           action: 'create',
           before: null,
-          after: payload,
+          after: createData,
           undone: false,
           createdAt: new Date(),
         },
@@ -1127,6 +1293,8 @@ const workoutLogs = {
     } as any);
 
     return doc;
+  
+  
   },
 
   update: async (
@@ -1176,6 +1344,13 @@ const workoutLogs = {
 
   list: async (user_id: Types.ObjectId) => {
     return UserExercisePerformModel.find({
+      user_id,
+      isDeleted: false,
+    } as any).sort({ createdAt: -1 });
+  },
+  getSingle: async (user_id: Types.ObjectId, _id: string) => {
+    return UserExercisePerformModel.find({
+      _id,
       user_id,
       isDeleted: false,
     } as any).sort({ createdAt: -1 });

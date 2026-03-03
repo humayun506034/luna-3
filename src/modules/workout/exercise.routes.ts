@@ -167,12 +167,17 @@ exerciseRoutes.patch(
   exerciseController.updateWorkoutLog
 );
 
+
 exerciseRoutes.get(
   '/workouts/logs',
   auth([userRole.user, userRole.admin]),
   exerciseController.listWorkoutLogs
 );
-
+exerciseRoutes.get(
+  '/workouts/logs/:id',
+  auth([userRole.user, userRole.admin]),
+  exerciseController.SingleWorkoutLogs
+);
 exerciseRoutes.delete(
   '/workouts/logs/:id',
   auth([userRole.user, userRole.admin]),

@@ -293,10 +293,10 @@ const getExerciseBothCommonAndPersonalize = catchAsync(async (req, res) => {
   }
   const convertedUserId = idConverter(userId) as Types.ObjectId;
 
-  const exercises =
-    await exerciseServicves.getExerciseBothCommonAndPersonalize(
-      convertedUserId, req?.user?.role
-    );
+  const exercises = await exerciseServicves.getExerciseBothCommonAndPersonalize(
+    convertedUserId,
+    req?.user?.role
+  );
 
   res.status(200).json({
     success: true,
@@ -312,7 +312,9 @@ const getExerciseById = catchAsync(async (req, res) => {
   }
   const convertedExerciseId = idConverter(exerciseId) as Types.ObjectId;
 
-  const exercise = await exerciseServicves.getExerciseById(convertedExerciseId) as any;
+  const exercise = (await exerciseServicves.getExerciseById(
+    convertedExerciseId
+  )) as any;
 
   // if (!(exercise.user_id as any).equals(req?.user?.id)) {
   //   throw new ApppError(401, 'Unauthorized');
@@ -496,6 +498,24 @@ const listWorkoutLogs = catchAsync(async (req, res) => {
   res.status(200).json({
     success: true,
     message: 'Workout log list fetched successfully',
+    data,
+  });
+});
+const SingleWorkoutLogs = catchAsync(async (req, res) => {
+  const userId = req.user?.id;
+  if (!userId || !Types.ObjectId.isValid(userId)) {
+    throw new Error('User not authenticated.');
+  }
+  const convertedUserId = idConverter(userId) as Types.ObjectId;
+
+  const data = await exerciseServicves.workoutLogs.getSingle(
+    convertedUserId,
+    req.params.id as string
+  );
+
+  res.status(200).json({
+    success: true,
+    message: 'Single Workout log fetched successfully',
     data,
   });
 });
@@ -727,7 +747,7 @@ const exerciseController = {
   deleteExercise,
   getPerformedExerciseById,
   getAllPerformedExercise,
-
+  SingleWorkoutLogs,
   createWorkoutLog,
   updateWorkoutLog,
   listWorkoutLogs,
