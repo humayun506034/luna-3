@@ -1210,7 +1210,7 @@ const workoutLogs = {
         const imageName = `${exercise.name ?? 'workout'}-${Date.now()}`;
         const uploadResult = await uploadImgToCloudinary(imageName, file.path);
         image = uploadResult.secure_url;
-        console.log("🚀 ~ image:", image)
+        console.log('🚀 ~ image:', image);
       } catch (error) {
         await deleteFile(file.path);
         throw error;
@@ -1253,7 +1253,7 @@ const workoutLogs = {
         }
 
         totalCaloryBurn = response.data.total_calories_burned;
-        console.log("🚀 ~ totalCaloryBurn:", totalCaloryBurn)
+        console.log('🚀 ~ totalCaloryBurn:', totalCaloryBurn);
       } catch (apiError: any) {
         throw new ApppError(
           502,
@@ -1271,8 +1271,12 @@ const workoutLogs = {
       resetTime: payload.resetTime,
       weightLifted: validatedWeightLifted,
       ...(validatedDistance !== undefined && { distance: validatedDistance }),
-      ...(payload.timeToPerform !== undefined && { timeToPerform: payload.timeToPerform }),
-      ...(payload.isCompleted !== undefined && { isCompleted: payload.isCompleted }),
+      ...(payload.timeToPerform !== undefined && {
+        timeToPerform: payload.timeToPerform,
+      }),
+      ...(payload.isCompleted !== undefined && {
+        isCompleted: payload.isCompleted,
+      }),
       ...(payload.note !== undefined && { note: payload.note }),
       ...(image !== undefined && { image }),
       totalCaloryBurn,
@@ -1293,8 +1297,6 @@ const workoutLogs = {
     } as any);
 
     return doc;
-  
-  
   },
 
   update: async (
@@ -1349,11 +1351,11 @@ const workoutLogs = {
     } as any).sort({ createdAt: -1 });
   },
   getSingle: async (user_id: Types.ObjectId, _id: string) => {
-    return UserExercisePerformModel.find({
+    return UserExercisePerformModel.findOne({
       _id,
       user_id,
       isDeleted: false,
-    } as any).sort({ createdAt: -1 });
+    } as any);
   },
 
   remove: async (user_id: Types.ObjectId, id: string) => {
@@ -1384,7 +1386,106 @@ const workoutLogs = {
     return { success: true };
   },
 
+  // undo: async (user_id: Types.ObjectId, id: string) => {
+  //   const doc = await UserExercisePerformModel.findOne({
+  //     _id: id,
+  //     user_id,
+  //   } as any);
+
+  //   if (!doc) throw new Error('Workout log not found');
+
+  //   const history = [...(((doc as any).history ?? []) as any[])].reverse();
+  //   const last = history.find((h) => !h.undone);
+
+  //   if (!last) throw new Error('No undoable action found');
+
+  //   if (last.action === 'create') (doc as any).isDeleted = true;
+  //   if (last.action === 'delete') (doc as any).isDeleted = false;
+  //   if (last.action === 'update' && last.before) {
+  //     Object.assign(doc, last.before);
+  //   }
+
+  //   const originalHistory = (((doc as any).history ?? []) as any[]).map((h) => {
+  //     if (
+  //       h.createdAt?.toString?.() === last.createdAt?.toString?.() &&
+  //       h.action === last.action &&
+  //       !h.undone
+  //     ) {
+  //       return { ...h, undone: true };
+  //     }
+  //     return h;
+  //   });
+
+  //   (doc as any).history = originalHistory;
+  //   await doc.save();
+
+  //   return { success: true };
+  // },
+
+  // undoLatest: async (user_id: Types.ObjectId) => {
+  //   const docs = await UserExercisePerformModel.find({ user_id } as any).sort({
+  //     updatedAt: -1,
+  //   });
+
+  //   for (const doc of docs) {
+  //     const currentHistory = ((doc as any).history ?? []) as Array<{
+  //       action: 'create' | 'update' | 'delete';
+  //       before: Record<string, unknown> | null;
+  //       after: Record<string, unknown> | null;
+  //       undone?: boolean;
+  //       createdAt?: Date;
+  //     }>;
+
+  //     const reversedHistory = [...currentHistory].reverse();
+  //     const lastActive = reversedHistory.find((entry) => !entry.undone);
+
+  //     if (!lastActive) {
+  //       continue;
+  //     }
+
+  //     if (lastActive.action === 'create') {
+  //       (doc as any).isDeleted = true;
+  //     } else if (lastActive.action === 'delete') {
+  //       (doc as any).isDeleted = false;
+  //     } else if (lastActive.action === 'update' && lastActive.before) {
+  //       Object.assign(doc, lastActive.before);
+  //     }
+
+  //     const updatedHistory = currentHistory.map((entry) => {
+  //       const sameCreatedAt =
+  //         entry.createdAt?.toString() === lastActive.createdAt?.toString();
+  //       const sameAction = entry.action === lastActive.action;
+
+  //       if (sameCreatedAt && sameAction && !entry.undone) {
+  //         return { ...entry, undone: true };
+  //       }
+
+  //       return entry;
+  //     });
+
+  //     (doc as any).history = updatedHistory;
+  //     await doc.save();
+
+  //     return { success: true };
+  //   }
+
+  //   throw new Error('No undoable action found');
+  // },
+
   undo: async (user_id: Types.ObjectId, id: string) => {
+    const stripMeta = (obj: Record<string, any>) => {
+      const safe = { ...(obj || {}) };
+
+      delete safe._id;
+      delete safe.__v;
+      delete safe.createdAt;
+      delete safe.updatedAt;
+      delete safe.history;
+      delete safe.user_id;
+
+      return safe;
+    };
+
     const doc = await UserExercisePerformModel.findOne({
       _id: id,
       user_id,
@@ -1397,10 +1498,12 @@ const workoutLogs = {
 
     if (!last) throw new Error('No undoable action found');
 
-    if (last.action === 'create') (doc as any).isDeleted = true;
-    if (last.action === 'delete') (doc as any).isDeleted = false;
-    if (last.action === 'update' && last.before) {
-      Object.assign(doc, last.before);
+    if (last.action === 'create') {
+      (doc as any).isDeleted = true;
+    } else if (last.action === 'delete') {
+      (doc as any).isDeleted = false;
+    } else if (last.action === 'update' && last.before) {
+      Object.assign(doc, stripMeta(last.before as Record<string, any>));
     }
 
     const originalHistory = (((doc as any).history ?? []) as any[]).map((h) => {
@@ -1421,6 +1524,19 @@ const workoutLogs = {
   },
 
   undoLatest: async (user_id: Types.ObjectId) => {
+    const stripMeta = (obj: Record<string, any>) => {
+      const safe = { ...(obj || {}) };
+
+      delete safe._id;
+      delete safe.__v;
+      delete safe.createdAt;
+      delete safe.updatedAt;
+      delete safe.history;
+      delete safe.user_id;
+
+      return safe;
+    };
+
     const docs = await UserExercisePerformModel.find({ user_id } as any).sort({
       updatedAt: -1,
     });
@@ -1437,16 +1553,14 @@ const workoutLogs = {
       const reversedHistory = [...currentHistory].reverse();
       const lastActive = reversedHistory.find((entry) => !entry.undone);
 
-      if (!lastActive) {
-        continue;
-      }
+      if (!lastActive) continue;
 
       if (lastActive.action === 'create') {
         (doc as any).isDeleted = true;
       } else if (lastActive.action === 'delete') {
         (doc as any).isDeleted = false;
       } else if (lastActive.action === 'update' && lastActive.before) {
-        Object.assign(doc, lastActive.before);
+        Object.assign(doc, stripMeta(lastActive.before as Record<string, any>));
       }
 
       const updatedHistory = currentHistory.map((entry) => {
