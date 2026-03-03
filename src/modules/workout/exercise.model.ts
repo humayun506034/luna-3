@@ -97,9 +97,7 @@
 //   UserExercisePerformSchema
 // );
 
-
-
-import { model, Schema } from 'mongoose';
+import mongoose, { model, Schema } from 'mongoose';
 import { TExercise, UserExercisePerform } from './exercise.interface';
 
 const ExerciseSchema = new Schema<TExercise>({
@@ -108,9 +106,9 @@ const ExerciseSchema = new Schema<TExercise>({
     required: true,
   },
   user_id: {
-    type: Schema.Types.ObjectId,
-    required: false,
-    default: null,
+    type: mongoose.Schema.Types.ObjectId,
+    ref: 'UserCollection', // ⚠️ এটা অবশ্যই User model name হবে
+    required: true,
   },
   name: {
     type: String,

@@ -1,3 +1,5 @@
+/* eslint-disable @typescript-eslint/no-explicit-any */
+import { ObjectId } from 'mongoose';
 // import { Types } from 'mongoose';
 // import catchAsync from '../../util/catchAsync';
 // import idConverter from '../../util/idConvirter';
@@ -220,6 +222,7 @@ import { Types } from 'mongoose';
 import catchAsync from '../../util/catchAsync';
 import idConverter from '../../util/idConvirter';
 import exerciseServicves from './exercise.service';
+import ApppError from '../../error/AppError';
 
 const createCommonExercise = catchAsync(async (req, res) => {
   const File = req.file;
@@ -292,7 +295,7 @@ const getExerciseBothCommonAndPersonalize = catchAsync(async (req, res) => {
 
   const exercises =
     await exerciseServicves.getExerciseBothCommonAndPersonalize(
-      convertedUserId
+      convertedUserId, req?.user?.role
     );
 
   res.status(200).json({
@@ -309,7 +312,11 @@ const getExerciseById = catchAsync(async (req, res) => {
   }
   const convertedExerciseId = idConverter(exerciseId) as Types.ObjectId;
 
-  const exercise = await exerciseServicves.getExerciseById(convertedExerciseId);
+  const exercise = await exerciseServicves.getExerciseById(convertedExerciseId) as any;
+
+  // if (!(exercise.user_id as any).equals(req?.user?.id)) {
+  //   throw new ApppError(401, 'Unauthorized');
+  // }
 
   res.status(200).json({
     success: true,
@@ -573,7 +580,8 @@ const workoutAnalysis = catchAsync(async (req, res) => {
   }
   const convertedUserId = idConverter(userId) as Types.ObjectId;
 
-  const timeSpan = (req.query.timeSpan as '3m' | '6m' | '12m') || '3m';
+  const timeSpan =
+    (req.query.timeSpan as '30d' | '3m' | '6m' | '12m' | '1y') || '3m';
 
   const data = await exerciseServicves.workoutLogs.analysis(
     convertedUserId,
@@ -583,6 +591,128 @@ const workoutAnalysis = catchAsync(async (req, res) => {
   res.status(200).json({
     success: true,
     message: 'Workout analysis fetched successfully',
+    data,
+  });
+});
+
+const createLiftList = catchAsync(async (req, res) => {
+  const userId = req.user?.id;
+  if (!userId || !Types.ObjectId.isValid(userId)) {
+    throw new Error('User not authenticated.');
+  }
+  const convertedUserId = idConverter(userId) as Types.ObjectId;
+
+  const data = await exerciseServicves.liftLists.create(
+    convertedUserId,
+    req.body
+  );
+  res.status(201).json({
+    success: true,
+    message: 'Lift list created successfully',
+    data,
+  });
+});
+
+const listLiftLists = catchAsync(async (req, res) => {
+  const userId = req.user?.id;
+  if (!userId || !Types.ObjectId.isValid(userId)) {
+    throw new Error('User not authenticated.');
+  }
+  const convertedUserId = idConverter(userId) as Types.ObjectId;
+
+  const data = await exerciseServicves.liftLists.list(convertedUserId);
+  res.status(200).json({
+    success: true,
+    message: 'Lift lists fetched successfully',
+    data,
+  });
+});
+
+const addLiftListItem = catchAsync(async (req, res) => {
+  const userId = req.user?.id;
+  if (!userId || !Types.ObjectId.isValid(userId)) {
+    throw new Error('User not authenticated.');
+  }
+  const convertedUserId = idConverter(userId) as Types.ObjectId;
+
+  const data = await exerciseServicves.liftLists.addItem(
+    convertedUserId,
+    req.params.id as string,
+    req.body.itemId as string
+  );
+  res.status(200).json({
+    success: true,
+    message: 'Lift list item added successfully',
+    data,
+  });
+});
+
+const removeLiftListItem = catchAsync(async (req, res) => {
+  const userId = req.user?.id;
+  if (!userId || !Types.ObjectId.isValid(userId)) {
+    throw new Error('User not authenticated.');
+  }
+  const convertedUserId = idConverter(userId) as Types.ObjectId;
+
+  const data = await exerciseServicves.liftLists.removeItem(
+    convertedUserId,
+    req.params.id as string,
+    req.body.itemId as string
+  );
+  res.status(200).json({
+    success: true,
+    message: 'Lift list item removed successfully',
+    data,
+  });
+});
+
+const deleteLiftList = catchAsync(async (req, res) => {
+  const userId = req.user?.id;
+  if (!userId || !Types.ObjectId.isValid(userId)) {
+    throw new Error('User not authenticated.');
+  }
+  const convertedUserId = idConverter(userId) as Types.ObjectId;
+
+  const data = await exerciseServicves.liftLists.remove(
+    convertedUserId,
+    req.params.id as string
+  );
+  res.status(200).json({
+    success: true,
+    message: 'Lift list deleted successfully',
+    data,
+  });
+});
+
+const undoLiftList = catchAsync(async (req, res) => {
+  const userId = req.user?.id;
+  if (!userId || !Types.ObjectId.isValid(userId)) {
+    throw new Error('User not authenticated.');
+  }
+  const convertedUserId = idConverter(userId) as Types.ObjectId;
+
+  const data = await exerciseServicves.liftLists.undo(
+    convertedUserId,
+    req.params.id as string
+  );
+  res.status(200).json({
+    success: true,
+    message: 'Lift list undo successful',
+    data,
+  });
+});
+
+const undoLatestLiftList = catchAsync(async (req, res) => {
+  const userId = req.user?.id;
+  if (!userId || !Types.ObjectId.isValid(userId)) {
+    throw new Error('User not authenticated.');
+  }
+  const convertedUserId = idConverter(userId) as Types.ObjectId;
+
+  const data = await exerciseServicves.liftLists.undoLatest(convertedUserId);
+  res.status(200).json({
+    success: true,
+    message: 'Latest lift list action undone successfully',
     data,
   });
 });
@@ -606,6 +736,13 @@ const exerciseController = {
   undoLatestWorkoutLog,
   shareWorkoutLog,
   workoutAnalysis,
+  createLiftList,
+  listLiftLists,
+  addLiftListItem,
+  removeLiftListItem,
+  deleteLiftList,
+  undoLiftList,
+  undoLatestLiftList,
 };
 
 export default exerciseController;

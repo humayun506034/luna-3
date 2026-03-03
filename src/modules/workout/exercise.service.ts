@@ -451,7 +451,7 @@
 
 /* eslint-disable @typescript-eslint/no-explicit-any */
 import axios from 'axios';
-import mongoose, { ObjectId, Types } from 'mongoose';
+import mongoose, { Types } from 'mongoose';
 import { EXERCISE_TYPES } from '../../constents';
 import ApppError from '../../error/AppError';
 import {
@@ -461,6 +461,75 @@ import {
 import { UserModel, WorkoutASetupModel } from '../user/user.model';
 import { TExercise } from './exercise.interface';
 import { ExerciseModel, UserExercisePerformModel } from './exercise.model';
+
+const liftListSchema = new mongoose.Schema(
+  {
+    user_id: {
+      type: mongoose.Schema.Types.ObjectId,
+      required: true,
+      index: true,
+    },
+    name: {
+      type: String,
+      required: true,
+      trim: true,
+    },
+    itemType: {
+      type: String,
+      enum: ['workout', 'running'],
+      default: 'workout',
+    },
+    itemIds: {
+      type: [String],
+      default: [],
+    },
+    isDeleted: {
+      type: Boolean,
+      default: false,
+      index: true,
+    },
+    history: {
+      type: [
+        {
+          action: {
+            type: String,
+            enum: ['create', 'update', 'delete'],
+            required: true,
+          },
+          before: {
+            type: mongoose.Schema.Types.Mixed,
+            default: null,
+          },
+          after: {
+            type: mongoose.Schema.Types.Mixed,
+            default: null,
+          },
+          undone: {
+            type: Boolean,
+            default: false,
+          },
+          createdAt: {
+            type: Date,
+            default: Date.now,
+          },
+        },
+      ],
+      default: [],
+    },
+  },
+  { timestamps: true }
+);
+
+const WorkoutLiftListModel =
+  (mongoose.models.WorkoutLiftListModel as mongoose.Model<any>) ||
+  mongoose.model('WorkoutLiftListModel', liftListSchema);
+
+const parseLiftListId = (id: string) => {
+  if (!Types.ObjectId.isValid(id)) {
+    throw new ApppError(400, 'Invalid lift list ID');
+  }
+  return id;
+};
 
 const createCommonExercise = async (
   file: any,
@@ -525,27 +594,43 @@ const createPersonalizeExercise = async (
 };
 
 const getExerciseBothCommonAndPersonalize = async (
-  user_id: Types.ObjectId
-): Promise<TExercise[]> => {
+  user_id: Types.ObjectId, role?:string
+) => {
   if (!Types.ObjectId.isValid(user_id)) {
     throw new Error('Invalid user ID.');
   }
+
+  console.log(role)
 
   if (mongoose.connection.readyState !== 1) {
     throw new Error('MongoDB connection is not ready.');
   }
 
-  try {
-    const exercises = await ExerciseModel.find({
-      $or: [{ user_id: user_id }, { user_id: null }],
-    })
-      .sort({ user_id: -1 })
-      .lean();
-
-    return exercises;
-  } catch {
-    throw new Error('Failed to retrieve exercises.');
+  if(role==='admin'){
+    try {
+      const exercises = await ExerciseModel.find({}).populate({
+        path: 'user_id',
+        select: 'name email img role', // only needed fields
+      }).lean();
+  
+      return exercises;
+    } catch {
+      throw new Error('Failed to retrieve exercises.');
+    }
+  }else if(role==='user'){
+    try {
+      const exercises = await ExerciseModel.find({ user_id: user_id }).populate({
+        path: 'user_id',
+        select: 'name email img role', // only needed fields
+      }).lean();
+  
+      return exercises;
+    } catch {
+      throw new Error('Failed to retrieve exercises.');
+    }
   }
+
+  
 };
 
 const getExerciseById = async (exercise_id: Types.ObjectId) => {
@@ -557,38 +642,50 @@ const getExerciseById = async (exercise_id: Types.ObjectId) => {
     throw new Error('MongoDB connection is not ready.');
   }
 
-  try {
-    const findExercise = await ExerciseModel.findOne({
-      _id: exercise_id,
-    }).lean();
+  const findExercise = await ExerciseModel.findById(exercise_id)
+    .populate({
+      path: 'user_id',
+      select: 'name email img role', // only needed fields
+    })
+    .lean();
 
-    if (!findExercise) {
-      throw new Error('Exercise not found.');
-    }
-
-    const meta = {
-      set: 'required',
-      reps: 'required',
-      resetTime: 'required',
-    };
-
-    let modifyFoundData = {};
-    if (findExercise.exerciseType === EXERCISE_TYPES.weight_training) {
-      modifyFoundData = { weightLifted: 'required', ...meta };
-    } else if (
-      findExercise.exerciseType === EXERCISE_TYPES.bodyweight_exercises ||
-      findExercise.exerciseType === EXERCISE_TYPES.high_Intensity ||
-      findExercise.exerciseType === EXERCISE_TYPES.strength_Training
-    ) {
-      modifyFoundData = { weightLifted: 'optional', ...meta };
-    } else {
-      modifyFoundData = { weightLifted: 'false', ...meta };
-    }
-
-    return { ...findExercise, ...modifyFoundData };
-  } catch (error: any) {
-    throw new Error(error.message || 'Failed to retrieve exercise.');
+  if (!findExercise) {
+    throw new ApppError(404, 'Exercise not found');
   }
+
+  if (!findExercise) {
+    throw new ApppError(404, 'Exercise not found.');
+  }
+
+  return findExercise;
+  //   const findExercise = await ExerciseModel.findOne({
+  //     _id: exercise_id,
+  //   }).lean();
+
+  //   if (!findExercise) {
+  //     throw new Error('Exercise not found.');
+  //   }
+
+  //   const meta = {
+  //     set: 'required',
+  //     reps: 'required',
+  //     resetTime: 'required',
+  //   };
+
+  //   let modifyFoundData = {};
+  //   if (findExercise.exerciseType === EXERCISE_TYPES.weight_training) {
+  //     modifyFoundData = { weightLifted: 'required', ...meta };
+  //   } else if (
+  //     findExercise.exerciseType === EXERCISE_TYPES.bodyweight_exercises ||
+  //     findExercise.exerciseType === EXERCISE_TYPES.high_Intensity ||
+  //     findExercise.exerciseType === EXERCISE_TYPES.strength_Training
+  //   ) {
+  //     modifyFoundData = { weightLifted: 'optional', ...meta };
+  //   } else {
+  //     modifyFoundData = { weightLifted: 'false', ...meta };
+  //   }
+
+  //   return { ...findExercise, ...modifyFoundData };
 };
 
 // const performExercise = async (
@@ -626,8 +723,6 @@ const getExerciseById = async (exercise_id: Types.ObjectId) => {
 //     console.log("Exercise not found");
 //   }
 // }
-
- 
 
 //   if (
 //     !payLoad.exercise_id ||
@@ -696,8 +791,6 @@ const getExerciseById = async (exercise_id: Types.ObjectId) => {
 //   }
 // };
 
-
-
 const performExercise = async (
   user_id: Types.ObjectId,
   payLoad: Partial<{
@@ -719,9 +812,9 @@ const performExercise = async (
     throw new ApppError(500, 'MongoDB connection is not ready');
   }
 
-  // Validate required fields
-  if (!payLoad.exercise_id || payLoad.set == null || payLoad.reps == null || payLoad.resetTime == null) {
-    throw new ApppError(400, 'exercise_id, set, reps, and resetTime are required');
+  // Minimal required field for quick-track flow
+  if (!payLoad.exercise_id) {
+    throw new ApppError(400, 'exercise_id is required');
   }
 
   // Validate exercise_id format
@@ -745,14 +838,20 @@ const performExercise = async (
   // Validate weightLifted or distance based on exercise type
   let validatedWeightLifted: number = payLoad.weightLifted ?? 0;
   let distance: number | undefined = undefined;
+  const safeSet = payLoad.set ?? 1;
+  const safeReps = payLoad.reps ?? 1;
+  const safeResetTime = payLoad.resetTime ?? 0;
 
   if (exercise.exerciseType === 'weight_training') {
     if (validatedWeightLifted <= 0) {
-      throw new ApppError(400, 'weightLifted must be a positive number for weight_training');
+      throw new ApppError(
+        400,
+        'weightLifted must be a positive number for weight_training'
+      );
     }
   } else if (exercise.exerciseType === 'cardio') {
     validatedWeightLifted = 0;
-    if (!payLoad.distance) {
+    if (!payLoad.distance || payLoad.distance <= 0) {
       throw new ApppError(400, 'distance is required for cardio exercise');
     }
     distance = payLoad.distance;
@@ -773,52 +872,58 @@ const performExercise = async (
   // };
 
   const exercisePerformData = {
-  exercise_id: payLoad.exercise_id,
-  user_id,
-  set: payLoad.set,
-  weightLifted: validatedWeightLifted,
-  reps: payLoad.reps,
-  resetTime: payLoad.resetTime,
-  isCompleted: false,
-  note: payLoad.note,
-  image:exercise.img,
-  totalCaloryBurn: payLoad.totalCaloryBurn ?? 0,
-  ...(distance !== undefined && { distance }),
-  ...(payLoad.timeToPerform !== undefined && { timeToPerform: payLoad.timeToPerform }),
+    exercise_id: payLoad.exercise_id,
+    user_id,
+    set: safeSet,
+    weightLifted: validatedWeightLifted,
+    reps: safeReps,
+    resetTime: safeResetTime,
+    isCompleted: false,
+    note: payLoad.note ?? '',
+    image: payLoad.image ?? exercise.img,
+    totalCaloryBurn: payLoad.totalCaloryBurn ?? 0,
+    ...(distance !== undefined && { distance }),
+    ...(payLoad.timeToPerform !== undefined && {
+      timeToPerform: payLoad.timeToPerform,
+    }),
 
-  // add this
-  isDeleted: false,
-  history: [
-    {
-      action: 'create',
-      before: null,
-      after: {
-        exercise_id: payLoad.exercise_id,
-        user_id,
-        set: payLoad.set,
-        weightLifted: validatedWeightLifted,
-        reps: payLoad.reps,
-        resetTime: payLoad.resetTime,
-        totalCaloryBurn: payLoad.totalCaloryBurn ?? 0,
-        ...(distance !== undefined && { distance }),
-        ...(payLoad.timeToPerform !== undefined && { timeToPerform: payLoad.timeToPerform }),
+    // add this
+    isDeleted: false,
+    history: [
+      {
+        action: 'create',
+        before: null,
+        after: {
+          exercise_id: payLoad.exercise_id,
+          user_id,
+          set: safeSet,
+          weightLifted: validatedWeightLifted,
+          reps: safeReps,
+          resetTime: safeResetTime,
+          totalCaloryBurn: payLoad.totalCaloryBurn ?? 0,
+          ...(distance !== undefined && { distance }),
+          ...(payLoad.timeToPerform !== undefined && {
+            timeToPerform: payLoad.timeToPerform,
+          }),
+        },
+        undone: false,
+        createdAt: new Date(),
       },
-      undone: false,
-      createdAt: new Date(),
-    },
-  ],
-};
-
+    ],
+  };
 
   // Save exercise perform data
   try {
-    const savedExercisePerform = await UserExercisePerformModel.create(exercisePerformData);
+    const savedExercisePerform =
+      await UserExercisePerformModel.create(exercisePerformData);
     return savedExercisePerform;
   } catch (error: any) {
-    throw new ApppError(500, error.message || 'Failed to create user exercise perform');
+    throw new ApppError(
+      500,
+      error.message || 'Failed to create user exercise perform'
+    );
   }
 };
-
 
 const markExerciseAsCompleated = async (
   user_id: Types.ObjectId,
@@ -893,11 +998,35 @@ const markExerciseAsCompleated = async (
       );
     }
 
-    const markAsDone = await UserExercisePerformModel.findOneAndUpdate(
-      { _id: Performed_exercise_id, user_id },
-      { isCompleted: true, totalCaloryBurn },
-      { new: true }
-    );
+    const performedExerciseDoc = await UserExercisePerformModel.findOne({
+      _id: Performed_exercise_id,
+      user_id,
+    } as any);
+
+    if (!performedExerciseDoc) {
+      throw new Error('Failed to mark exercise as completed');
+    }
+
+    const before = performedExerciseDoc.toObject();
+    (performedExerciseDoc as any).isCompleted = true;
+    (performedExerciseDoc as any).totalCaloryBurn = totalCaloryBurn;
+    (performedExerciseDoc as any).history = [
+      ...(((performedExerciseDoc as any).history ?? []) as any[]),
+      {
+        action: 'update',
+        before,
+        after: {
+          ...before,
+          isCompleted: true,
+          totalCaloryBurn,
+        },
+        undone: false,
+        createdAt: new Date(),
+      },
+    ];
+    await performedExerciseDoc.save();
+
+    const markAsDone = performedExerciseDoc;
 
     if (!markAsDone) {
       throw new Error('Failed to mark exercise as completed');
@@ -921,9 +1050,10 @@ const getPerformedExerciseById = async (
   return exercise;
 };
 
-const getAllPerformedExercise = async (userId: Types.ObjectId) => {
+const getAllPerformedExercise = async (userId: Types.ObjectId, role?: string) => {
   const exercises = await UserExercisePerformModel.find({
     user_id: userId,
+    history: { $exists: true, $not: { $size: 0 } },
   }).lean();
 
   return exercises;
@@ -1189,11 +1319,12 @@ const workoutLogs = {
 
   analysis: async (
     user_id: Types.ObjectId,
-    timeSpan: '3m' | '6m' | '12m' = '3m'
+    timeSpan: '30d' | '3m' | '6m' | '12m' | '1y' = '3m'
   ) => {
     let days = 90;
+    if (timeSpan === '30d') days = 30;
     if (timeSpan === '6m') days = 180;
-    if (timeSpan === '12m') days = 365;
+    if (timeSpan === '12m' || timeSpan === '1y') days = 365;
 
     const from = new Date();
     from.setDate(from.getDate() - days);
@@ -1216,6 +1347,200 @@ const workoutLogs = {
   },
 };
 
+const liftLists = {
+  create: async (user_id: Types.ObjectId, payload: any) => {
+    if (!payload?.name?.trim?.()) {
+      throw new ApppError(400, 'Lift list name is required');
+    }
+
+    const itemIds = Array.isArray(payload.itemIds) ? payload.itemIds : [];
+    const doc = await WorkoutLiftListModel.create({
+      user_id,
+      name: payload.name.trim(),
+      itemType: payload.itemType ?? 'workout',
+      itemIds,
+      isDeleted: false,
+      history: [
+        {
+          action: 'create',
+          before: null,
+          after: {
+            name: payload.name.trim(),
+            itemType: payload.itemType ?? 'workout',
+            itemIds,
+          },
+          undone: false,
+          createdAt: new Date(),
+        },
+      ],
+    });
+
+    return doc;
+  },
+
+  list: async (user_id: Types.ObjectId) =>
+    WorkoutLiftListModel.find({
+      user_id,
+      isDeleted: false,
+    }).sort({ createdAt: -1 }),
+
+  addItem: async (user_id: Types.ObjectId, id: string, itemId: string) => {
+    if (!itemId) {
+      throw new ApppError(400, 'itemId is required');
+    }
+
+    const doc = await WorkoutLiftListModel.findOne({
+      _id: parseLiftListId(id),
+      user_id,
+      isDeleted: false,
+    });
+
+    if (!doc) throw new ApppError(404, 'Lift list not found');
+
+    const before = doc.toObject();
+    const itemSet = new Set<string>(doc.itemIds ?? []);
+    itemSet.add(itemId);
+    doc.itemIds = Array.from(itemSet);
+
+    doc.history = [
+      ...(doc.history ?? []),
+      {
+        action: 'update',
+        before,
+        after: doc.toObject(),
+        undone: false,
+        createdAt: new Date(),
+      },
+    ];
+
+    await doc.save();
+    return doc;
+  },
+
+  removeItem: async (user_id: Types.ObjectId, id: string, itemId: string) => {
+    if (!itemId) {
+      throw new ApppError(400, 'itemId is required');
+    }
+
+    const doc = await WorkoutLiftListModel.findOne({
+      _id: parseLiftListId(id),
+      user_id,
+      isDeleted: false,
+    });
+
+    if (!doc) throw new ApppError(404, 'Lift list not found');
+
+    const before = doc.toObject();
+    doc.itemIds = (doc.itemIds ?? []).filter((x: string) => x !== itemId);
+
+    doc.history = [
+      ...(doc.history ?? []),
+      {
+        action: 'update',
+        before,
+        after: doc.toObject(),
+        undone: false,
+        createdAt: new Date(),
+      },
+    ];
+
+    await doc.save();
+    return doc;
+  },
+
+  remove: async (user_id: Types.ObjectId, id: string) => {
+    const doc = await WorkoutLiftListModel.findOne({
+      _id: parseLiftListId(id),
+      user_id,
+      isDeleted: false,
+    });
+
+    if (!doc) throw new ApppError(404, 'Lift list not found');
+
+    const before = doc.toObject();
+    doc.isDeleted = true;
+    doc.history = [
+      ...(doc.history ?? []),
+      {
+        action: 'delete',
+        before,
+        after: null,
+        undone: false,
+        createdAt: new Date(),
+      },
+    ];
+
+    await doc.save();
+    return { success: true };
+  },
+
+  undo: async (user_id: Types.ObjectId, id: string) => {
+    const doc = await WorkoutLiftListModel.findOne({
+      _id: parseLiftListId(id),
+      user_id,
+    });
+
+    if (!doc) throw new ApppError(404, 'Lift list not found');
+
+    const history = [...(doc.history ?? [])].reverse();
+    const last = history.find((entry: any) => !entry.undone);
+
+    if (!last) throw new ApppError(400, 'No undoable action found');
+
+    if (last.action === 'create') doc.isDeleted = true;
+    if (last.action === 'delete') doc.isDeleted = false;
+    if (last.action === 'update' && last.before) {
+      Object.assign(doc, last.before);
+    }
+
+    doc.history = (doc.history ?? []).map((entry: any) => {
+      const sameAction = entry.action === last.action;
+      const sameCreatedAt =
+        entry.createdAt?.toString?.() === last.createdAt?.toString?.();
+      if (sameAction && sameCreatedAt && !entry.undone) {
+        return { ...entry, undone: true };
+      }
+      return entry;
+    });
+
+    await doc.save();
+    return { success: true };
+  },
+
+  undoLatest: async (user_id: Types.ObjectId) => {
+    const docs = await WorkoutLiftListModel.find({ user_id }).sort({
+      updatedAt: -1,
+    });
+
+    for (const doc of docs) {
+      const history = [...(doc.history ?? [])].reverse();
+      const last = history.find((entry: any) => !entry.undone);
+      if (!last) continue;
+
+      if (last.action === 'create') doc.isDeleted = true;
+      if (last.action === 'delete') doc.isDeleted = false;
+      if (last.action === 'update' && last.before) {
+        Object.assign(doc, last.before);
+      }
+
+      doc.history = (doc.history ?? []).map((entry: any) => {
+        const sameAction = entry.action === last.action;
+        const sameCreatedAt =
+          entry.createdAt?.toString?.() === last.createdAt?.toString?.();
+        if (sameAction && sameCreatedAt && !entry.undone) {
+          return { ...entry, undone: true };
+        }
+        return entry;
+      });
+
+      await doc.save();
+      return { success: true };
+    }
+
+    throw new ApppError(400, 'No undoable action found');
+  },
+};
+
 const exerciseServicves = {
   createCommonExercise,
   createPersonalizeExercise,
@@ -1227,6 +1552,7 @@ const exerciseServicves = {
   getPerformedExerciseById,
   getAllPerformedExercise,
   workoutLogs,
+  liftLists,
 };
 
 export default exerciseServicves;

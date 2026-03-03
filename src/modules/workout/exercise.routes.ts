@@ -121,6 +121,13 @@ exerciseRoutes.post(
   exerciseController.performExercise
 );
 
+// alias for lower-friction tracking flow
+exerciseRoutes.post(
+  '/trackExercise',
+  auth([userRole.user, userRole.admin]),
+  exerciseController.performExercise
+);
+
 exerciseRoutes.patch(
   '/markExerciseAsCompleated',
   auth([userRole.user, userRole.admin]),
@@ -135,13 +142,13 @@ exerciseRoutes.delete(
 
 exerciseRoutes.get(
   '/performed-exercises/:exerciseId',
-  auth([userRole.user]),
+  auth([userRole.user, userRole.admin]),
   exerciseController.getPerformedExerciseById
 );
 
 exerciseRoutes.get(
   '/performed-exercises',
-  auth([userRole.user]),
+  auth([userRole.user, userRole.admin]),
   exerciseController.getAllPerformedExercise
 );
 
@@ -194,6 +201,49 @@ exerciseRoutes.get(
   '/analysis/workout',
   auth([userRole.user, userRole.admin]),
   exerciseController.workoutAnalysis
+);
+
+// lift lists (playlist-style organization)
+exerciseRoutes.post(
+  '/lift-lists',
+  auth([userRole.user, userRole.admin]),
+  exerciseController.createLiftList
+);
+
+exerciseRoutes.get(
+  '/lift-lists',
+  auth([userRole.user, userRole.admin]),
+  exerciseController.listLiftLists
+);
+
+exerciseRoutes.patch(
+  '/lift-lists/:id/add-item',
+  auth([userRole.user, userRole.admin]),
+  exerciseController.addLiftListItem
+);
+
+exerciseRoutes.patch(
+  '/lift-lists/:id/remove-item',
+  auth([userRole.user, userRole.admin]),
+  exerciseController.removeLiftListItem
+);
+
+exerciseRoutes.delete(
+  '/lift-lists/:id',
+  auth([userRole.user, userRole.admin]),
+  exerciseController.deleteLiftList
+);
+
+exerciseRoutes.post(
+  '/lift-lists/:id/undo',
+  auth([userRole.user, userRole.admin]),
+  exerciseController.undoLiftList
+);
+
+exerciseRoutes.post(
+  '/lift-lists/undo-latest',
+  auth([userRole.user, userRole.admin]),
+  exerciseController.undoLatestLiftList
 );
 
 export default exerciseRoutes;
