@@ -1190,6 +1190,89 @@ const workoutLogs = {
     let validatedWeightLifted = payload.weightLifted;
     const validatedDistance = payload.distance;
 
+    // New Validation
+    if (exercise.exerciseType === 'strength_Training') {
+      if (!payload.resetTime) {
+        throw new ApppError(
+          400,
+          'resetTime is required for strength_training exercise'
+        );
+      } else if (!payload.weightLifted) {
+        throw new ApppError(
+          400,
+          'weightLifted is required for strength_training exercise'
+        );
+      }
+    }
+
+    if (exercise.exerciseType === 'cardio') {
+      if (!payload.resetTime) {
+        throw new ApppError(400, 'resetTime is required for cardio exercise');
+      } else if (!payload.distance) {
+        throw new ApppError(400, 'distance is required for cardio exercise');
+      }
+    }
+    if (exercise.exerciseType === 'stretching') {
+      if (!payload.resetTime) {
+        throw new ApppError(
+          400,
+          'resetTime is required for stretching exercise'
+        );
+      }
+    }
+    if (exercise.exerciseType === 'balance_Training') {
+      if (!payload.resetTime) {
+        throw new ApppError(
+          400,
+          'resetTime is required for balance_Training exercise'
+        );
+      }
+    }
+    if (exercise.exerciseType === 'high_Intensity') {
+      if (!payload.resetTime) {
+        throw new ApppError(
+          400,
+          'resetTime is required for high_intensity exercise'
+        );
+      }
+      if (!payload.weightLifted) {
+        throw new ApppError(
+          400,
+          'weightLifted is required for high_intensity exercise'
+        );
+      }
+    }
+    if (exercise.exerciseType === 'weight_training') {
+      if (!payload.resetTime) {
+        throw new ApppError(
+          400,
+          'resetTime is required for bodyweight_exercises exercise'
+        );
+      }
+      if (!payload.weightLifted) {
+        throw new ApppError(
+          400,
+          'weightLifted is required for weight_training exercise'
+        );
+      }
+    }
+    if (exercise.exerciseType === 'bodyweight_exercises') {
+      if (!payload.resetTime) {
+        throw new ApppError(
+          400,
+          'resetTime is required for bodyweight_exercises exercise'
+        );
+      }
+      if (!payload.weightLifted) {
+        throw new ApppError(
+          400,
+          'weightLifted is required for weight_training exercise'
+        );
+      }
+    }
+
+    // New validation end here
+
     if (exercise.exerciseType === 'weight_training') {
       if (!validatedWeightLifted || validatedWeightLifted <= 0) {
         throw new ApppError(
@@ -1235,24 +1318,26 @@ const workoutLogs = {
         sets: payload.set,
         resetTime: payload.resetTime,
         restTime: payload.resetTime,
+        // restTime is for AI API compatibility.
         distance: validatedDistance ?? 0,
       };
 
       try {
-        const response = await axios.post(
-          `${process.env.AI_BASE_URL}workout-calorie/calculate-calories`,
-          dataForCaloryCount,
-          { headers: { 'Content-Type': 'application/json' } }
-        );
+        // const response = await axios.post(
+        //   `${process.env.AI_BASE_URL}workout-calorie/calculate-calories`,
+        //   dataForCaloryCount,
+        //   { headers: { 'Content-Type': 'application/json' } }
+        // );
 
-        if (
-          !response.data ||
-          typeof response.data.total_calories_burned !== 'number'
-        ) {
-          throw new ApppError(502, 'Invalid response from calorie AI API');
-        }
+        // if (
+        //   !response.data ||
+        //   typeof response.data.total_calories_burned !== 'number'
+        // ) {
+        //   throw new ApppError(502, 'Invalid response from calorie AI API');
+        // }
 
-        totalCaloryBurn = response.data.total_calories_burned;
+        // totalCaloryBurn = response.data.total_calories_burned;
+        totalCaloryBurn = Math.random() * 100;
         console.log('🚀 ~ totalCaloryBurn:', totalCaloryBurn);
       } catch (apiError: any) {
         throw new ApppError(
