@@ -239,7 +239,7 @@ exerciseRoutes.delete(
   exerciseController.deleteLiftList
 );
 
-exerciseRoutes.post(
+exerciseRoutes.patch(
   '/lift-lists/:id/undo',
   auth([userRole.user, userRole.admin]),
   exerciseController.undoLiftList

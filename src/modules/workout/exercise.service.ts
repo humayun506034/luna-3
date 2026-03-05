@@ -1925,37 +1925,109 @@ const liftLists = {
     return { success: true };
   },
 
+  // undo: async (user_id: Types.ObjectId, id: string) => {
+  //   const doc = await WorkoutLiftListModel.findOne({
+  //     _id: parseLiftListId(id),
+  //     user_id,
+  //   });
+
+  //   if (!doc) throw new ApppError(404, 'Lift list not found');
+
+  //   const history = [...(doc.history ?? [])].reverse();
+  //   const last = history.find((entry: any) => !entry.undone);
+
+  //   if (!last) throw new ApppError(400, 'No undoable action found');
+
+  //   if (last.action === 'create') doc.isDeleted = true;
+  //   if (last.action === 'delete') doc.isDeleted = false;
+  //   if (last.action === 'update' && last.before) {
+  //     Object.assign(doc, last.before);
+  //   }
+
+  //   doc.history = (doc.history ?? []).map((entry: any) => {
+  //     const sameAction = entry.action === last.action;
+  //     const sameCreatedAt =
+  //       entry.createdAt?.toString?.() === last.createdAt?.toString?.();
+  //     if (sameAction && sameCreatedAt && !entry.undone) {
+  //       return { ...entry, undone: true };
+  //     }
+  //     return entry;
+  //   });
+
+  //   await doc.save();
+  //   return { success: true };
+  // },
+
   undo: async (user_id: Types.ObjectId, id: string) => {
-    const doc = await WorkoutLiftListModel.findOne({
-      _id: parseLiftListId(id),
-      user_id,
-    });
+    const liftListId = parseLiftListId(id);
 
-    if (!doc) throw new ApppError(404, 'Lift list not found');
+    for (let attempt = 0; attempt < 3; attempt++) {
+      const doc = (await WorkoutLiftListModel.findOne({
+        _id: liftListId,
+        user_id,
+      }).lean()) as any;
 
-    const history = [...(doc.history ?? [])].reverse();
-    const last = history.find((entry: any) => !entry.undone);
+      if (!doc) throw new ApppError(404, 'Lift list not found');
 
-    if (!last) throw new ApppError(400, 'No undoable action found');
+      const history = [...(doc.history ?? [])].reverse();
+      const last = history.find((entry: any) => !entry.undone);
+      if (!last) throw new ApppError(400, 'No undoable action found');
 
-    if (last.action === 'create') doc.isDeleted = true;
-    if (last.action === 'delete') doc.isDeleted = false;
-    if (last.action === 'update' && last.before) {
-      Object.assign(doc, last.before);
+      const setPayload: Record<string, any> = {};
+      let nextIsDeleted = doc.isDeleted;
+
+      if (last.action === 'create') nextIsDeleted = true;
+      if (last.action === 'delete') nextIsDeleted = false;
+
+      if (
+        last.action === 'update' &&
+        last.before &&
+        typeof last.before === 'object'
+      ) {
+        Object.assign(setPayload, last.before);
+
+        // IMPORTANT: never set these from history snapshot
+        delete setPayload._id;
+        delete setPayload.__v;
+        delete setPayload.user_id;
+        delete setPayload.createdAt;
+        delete setPayload.updatedAt;
+        delete setPayload.history;
+      }
+
+      const updatedHistory = (doc.history ?? []).map((entry: any) => {
+        if (
+          entry?._id?.toString?.() === last?._id?.toString?.() &&
+          !entry.undone
+        ) {
+          return { ...entry, undone: true };
+        }
+        return entry;
+      });
+
+      const result = await WorkoutLiftListModel.updateOne(
+        { _id: liftListId, user_id, __v: doc.__v }, // optimistic lock
+        {
+          $set: {
+            ...setPayload,
+            isDeleted: nextIsDeleted,
+            history: updatedHistory,
+            updatedAt: new Date(),
+          },
+          $inc: { __v: 1 },
+        }
+      );
+
+      if (result.modifiedCount === 1) {
+        return { success: true };
+      }
+      // version conflict হলে loop retry করবে
     }
 
-    doc.history = (doc.history ?? []).map((entry: any) => {
-      const sameAction = entry.action === last.action;
-      const sameCreatedAt =
-        entry.createdAt?.toString?.() === last.createdAt?.toString?.();
-      if (sameAction && sameCreatedAt && !entry.undone) {
-        return { ...entry, undone: true };
-      }
-      return entry;
-    });
-
-    await doc.save();
-    return { success: true };
+    throw new ApppError(
+      409,
+      'Lift list was modified concurrently. Please retry'
+    );
   },
 
   undoLatest: async (user_id: Types.ObjectId) => {
