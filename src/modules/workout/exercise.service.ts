@@ -1669,27 +1669,91 @@ const workoutLogs = {
     throw new Error('No undoable action found');
   },
 
+  // share: async (user_id: Types.ObjectId, id: string) => {
+  //   const log = await UserExercisePerformModel.findOne({
+  //     _id: id,
+  //     user_id,
+  //     isDeleted: false,
+  //   } as any).lean();
+  //   console.log("🚀 ~ log:", log)
+
+  //   if (!log) throw new Error('Workout log not found');
+
+  //   return {
+  //     type: 'workout',
+  //     title: 'Workout Progress' ,
+  //     caption: `${log.set} sets x ${log.reps} reps`,
+  //     stats: {
+  //       set: log.set,
+  //       reps: log.reps,
+  //       weightLifted: log.weightLifted,
+  //       totalCaloryBurn: log.totalCaloryBurn,
+  //     },
+  //   };
+  // },
+
   share: async (user_id: Types.ObjectId, id: string) => {
     const log = await UserExercisePerformModel.findOne({
       _id: id,
-      user_id,
+      user_id: user_id,
       isDeleted: false,
-    } as any).lean();
+    })
+      .populate('exercise_id')
+      .lean();
 
-    if (!log) throw new Error('Workout log not found');
+    if (!log) {
+      throw new Error('Workout log not found');
+    }
+
+    const exercise = log.exercise_id as any; // Better: define proper populated type
 
     return {
       type: 'workout',
-      title: 'Workout Progress',
+      title: exercise?.name ?? 'Workout Progress',
+      description: exercise?.description ?? 'Workout Progress',
+      primaryMuscleGroup: exercise?.primaryMuscleGroup ?? 'N/A',
+      exerciseType: exercise?.exerciseType ?? 'N/A',
       caption: `${log.set} sets x ${log.reps} reps`,
       stats: {
         set: log.set,
         reps: log.reps,
-        weightLifted: log.weightLifted,
-        totalCaloryBurn: log.totalCaloryBurn,
+        weightLifted: log.weightLifted ?? 0,
+        resetTime: log.resetTime ?? 0,
+        distance: log.distance ?? 0,
+        totalCaloryBurn: log.totalCaloryBurn ?? 0,
+        isCompleted: log.isCompleted ?? 0,
       },
     };
   },
+
+  // analysis: async (
+  //   user_id: Types.ObjectId,
+  //   timeSpan: '30d' | '3m' | '6m' | '12m' | '1y' = '3m'
+  // ) => {
+  //   let days = 90;
+  //   if (timeSpan === '30d') days = 30;
+  //   if (timeSpan === '6m') days = 180;
+  //   if (timeSpan === '12m' || timeSpan === '1y') days = 365;
+
+  //   const from = new Date();
+  //   from.setDate(from.getDate() - days);
+
+  //   return UserExercisePerformModel.aggregate([
+  //     { $match: { user_id, isDeleted: false, createdAt: { $gte: from } } },
+  //     {
+  //       $group: {
+  //         _id: { $dateToString: { format: '%Y-%m-%d', date: '$createdAt' } },
+  //         set: { $sum: '$set' },
+  //         reps: { $sum: '$reps' },
+  //         totalCaloryBurn: { $sum: '$totalCaloryBurn' },
+  //       },
+  //     },
+  //     {
+  //       $project: { _id: 0, date: '$_id', set: 1, reps: 1, totalCaloryBurn: 1 },
+  //     },
+  //     { $sort: { date: 1 } },
+  //   ]);
+  // },
 
   analysis: async (
     user_id: Types.ObjectId,
@@ -1703,21 +1767,34 @@ const workoutLogs = {
     const from = new Date();
     from.setDate(from.getDate() - days);
 
-    return UserExercisePerformModel.aggregate([
-      { $match: { user_id, isDeleted: false, createdAt: { $gte: from } } },
-      {
-        $group: {
-          _id: { $dateToString: { format: '%Y-%m-%d', date: '$createdAt' } },
-          set: { $sum: '$set' },
-          reps: { $sum: '$reps' },
-          totalCaloryBurn: { $sum: '$totalCaloryBurn' },
-        },
-      },
-      {
-        $project: { _id: 0, date: '$_id', set: 1, reps: 1, totalCaloryBurn: 1 },
-      },
-      { $sort: { date: 1 } },
-    ]);
+    const logs = await UserExercisePerformModel.find({
+      user_id,
+      isDeleted: false,
+      createdAt: { $gte: from },
+    }).lean();
+
+    const result: any = {};
+
+    logs.forEach((log) => {
+      const date = (log as any).createdAt.toISOString().split('T')[0];
+
+      if (!result[date]) {
+        result[date] = {
+          set: 0,
+          reps: 0,
+          totalCaloryBurn: 0,
+          date,
+        };
+      }
+
+      result[date].set += (log as any).set || 0;
+      result[date].reps += (log as any).reps || 0;
+      result[date].totalCaloryBurn += (log as any).totalCaloryBurn || 0;
+    });
+
+    return Object.values(result).sort((a: any, b: any) =>
+      a.date.localeCompare(b.date)
+    );
   },
 };
 
