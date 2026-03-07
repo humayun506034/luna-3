@@ -1323,21 +1323,21 @@ const workoutLogs = {
       };
 
       try {
-        // const response = await axios.post(
-        //   `${process.env.AI_BASE_URL}workout-calorie/calculate-calories`,
-        //   dataForCaloryCount,
-        //   { headers: { 'Content-Type': 'application/json' } }
-        // );
+        const response = await axios.post(
+          `${process.env.AI_BASE_URL}workout-calorie/calculate-calories`,
+          dataForCaloryCount,
+          { headers: { 'Content-Type': 'application/json' } }
+        );
 
-        // if (
-        //   !response.data ||
-        //   typeof response.data.total_calories_burned !== 'number'
-        // ) {
-        //   throw new ApppError(502, 'Invalid response from calorie AI API');
-        // }
+        if (
+          !response.data ||
+          typeof response.data.total_calories_burned !== 'number'
+        ) {
+          throw new ApppError(502, 'Invalid response from calorie AI API');
+        }
 
-        // totalCaloryBurn = response.data.total_calories_burned;
-        totalCaloryBurn = Math.random() * 100;
+        totalCaloryBurn = response.data.total_calories_burned;
+        // totalCaloryBurn = Math.random() * 100;
         console.log('🚀 ~ totalCaloryBurn:', totalCaloryBurn);
       } catch (apiError: any) {
         throw new ApppError(
