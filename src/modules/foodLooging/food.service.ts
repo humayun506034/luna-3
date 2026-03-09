@@ -177,7 +177,6 @@ const addFoodManually = async (
 
 // update (service) - auto publish when required fields become complete
 
-
 const addPersonalizeFoodManually = async (
   file: any,
   payload: Partial<TFood>,
@@ -274,23 +273,28 @@ const updateFood = async (
         calories:
           typeof foodData.nutritionPerServing?.calories === 'string'
             ? parseFloat(foodData.nutritionPerServing.calories)
-            : (foodData.nutritionPerServing?.calories ?? food.nutritionPerServing?.calories),
+            : (foodData.nutritionPerServing?.calories ??
+              food.nutritionPerServing?.calories),
         protein:
           typeof foodData.nutritionPerServing?.protein === 'string'
             ? parseFloat(foodData.nutritionPerServing.protein)
-            : (foodData.nutritionPerServing?.protein ?? food.nutritionPerServing?.protein),
+            : (foodData.nutritionPerServing?.protein ??
+              food.nutritionPerServing?.protein),
         carbs:
           typeof foodData.nutritionPerServing?.carbs === 'string'
             ? parseFloat(foodData.nutritionPerServing.carbs)
-            : (foodData.nutritionPerServing?.carbs ?? food.nutritionPerServing?.carbs),
+            : (foodData.nutritionPerServing?.carbs ??
+              food.nutritionPerServing?.carbs),
         fats:
           typeof foodData.nutritionPerServing?.fats === 'string'
             ? parseFloat(foodData.nutritionPerServing.fats)
-            : (foodData.nutritionPerServing?.fats ?? food.nutritionPerServing?.fats),
+            : (foodData.nutritionPerServing?.fats ??
+              food.nutritionPerServing?.fats),
         fiber:
           typeof foodData.nutritionPerServing?.fiber === 'string'
             ? parseFloat(foodData.nutritionPerServing.fiber)
-            : (foodData.nutritionPerServing?.fiber ?? food.nutritionPerServing?.fiber),
+            : (foodData.nutritionPerServing?.fiber ??
+              food.nutritionPerServing?.fiber),
       },
       microNutrients: foodData.microNutrients
         ? normalizeMicroNutrients(foodData.microNutrients)
@@ -303,7 +307,7 @@ const updateFood = async (
     const ready = isPublishReady(nextState);
 
     updateData.status = ready ? 'published' : 'draft';
-    updateData.publishedAt = ready ? (food.publishedAt || new Date()) : null;
+    updateData.publishedAt = ready ? food.publishedAt || new Date() : null;
 
     const updatedFood = await FoodModel.findOneAndUpdate(
       { _id: foodId },
@@ -385,11 +389,6 @@ export const assertFoodPublishReadyById = async (
 
   return true;
 };
-
-
-
-
-
 
 // AI API function to get nutrition data from raw image using fetch
 const getNutritionFromAI = async (file: MulterFile) => {
@@ -690,22 +689,96 @@ const deleteConsumedFood = async (foodId: string, user_id?: string) => {
   return { message: 'Consumed food deleted successfully' };
 };
 
-const getAllFood = async (user_id: Types.ObjectId): Promise<TFood[]> => {
+// const getAllFood = async (
+//   user_id: Types.ObjectId,
+//   status?: 'All' | 'draft' | 'published'
+// ) => {
+//   try {
+//     // Validate user_id
+//     if (!user_id || !Types.ObjectId.isValid(user_id)) {
+//       throw new Error('Invalid user ID');
+//     }
+
+//     // Query food: include personalized (user_id matches) and common (user_id is null)
+
+//     if (!status || status === 'All') {
+//       const foods = await FoodModel.find({
+//         $or: [
+//           { user_id: user_id }, // Personalized food
+//           { user_id: null }, // Common food
+//         ],
+//       })
+//         .lean() // Convert to plain JavaScript objects for performance
+//         .sort({ user_id: -1 }); // Sort: personalized (user_id exists) first, common (null) last
+
+//       return foods;
+//     }else if (status === 'draft') {
+//       const foods = await FoodModel.find({
+//         $or: [
+//           { user_id: user_id }, // Personalized food
+//           { user_id: null }, // Common food
+//         ],
+//         status: 'draft',
+//       })
+//         .lean() // Convert to plain JavaScript objects for performance
+//         .sort({ user_id: -1 }); // Sort: personalized (user_id exists) first, common (null) last
+
+//       return foods;
+//     }else if (status === 'published') {
+//       const foods = await FoodModel.find({
+//         $or: [
+//           { user_id: user_id }, // Personalized food
+//           { user_id: null }, // Common food
+//         ],
+//         status: 'published',
+//       })
+//         .lean() // Convert to plain JavaScript objects for performance
+//         .sort({ user_id: -1 }); // Sort: personalized (user_id exists) first, common (null) last
+
+//       return foods;
+//     }
+
+//     // const foods = await FoodModel.find({
+//     //   $or: [
+//     //     { user_id: user_id }, // Personalized food
+//     //     { user_id: null }, // Common food
+//     //   ],
+//     // })
+//     //   .lean() // Convert to plain JavaScript objects for performance
+//     //   .sort({ user_id: -1 }); // Sort: personalized (user_id exists) first, common (null) last
+
+//     // return foods;
+//   } catch (error: any) {
+//     console.error('Error fetching food:', error);
+//     throw new Error(error.message || 'Failed to fetch food');
+//   }
+// };
+
+const getAllFood = async (
+  user_id: Types.ObjectId,
+  status?: 'All' | 'draft' | 'published'
+) => {
   try {
     // Validate user_id
     if (!user_id || !Types.ObjectId.isValid(user_id)) {
       throw new Error('Invalid user ID');
     }
 
-    // Query food: include personalized (user_id matches) and common (user_id is null)
-    const foods = await FoodModel.find({
+    const query: any = {
       $or: [
         { user_id: user_id }, // Personalized food
-        { user_id: null }, // Common food
+        { user_id: null },    // Common food
       ],
-    })
-      .lean() // Convert to plain JavaScript objects for performance
-      .sort({ user_id: -1 }); // Sort: personalized (user_id exists) first, common (null) last
+    };
+
+    // Add status filter if needed
+    if (status && status !== 'All') {
+      query.status = status;
+    }
+
+    const foods = await FoodModel.find(query)
+      .lean()
+      .sort({ user_id: -1 }); // personalized first
 
     return foods;
   } catch (error: any) {
@@ -713,6 +786,7 @@ const getAllFood = async (user_id: Types.ObjectId): Promise<TFood[]> => {
     throw new Error(error.message || 'Failed to fetch food');
   }
 };
+
 
 interface FoodData {
   name?: string;

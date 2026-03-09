@@ -154,7 +154,7 @@ const getAllFood = catchAsync(async (req, res) => {
   const user_id = req.user.id as string;
   const convertedId = idConverter(user_id) as Types.ObjectId;
 
-  const result = await foodLoadingServices.getAllFood(convertedId);
+  const result = await foodLoadingServices.getAllFood(convertedId, req?.query?.status as "All" | "draft" | "published");
 
   res.status(200).json({
     status: 'success',
