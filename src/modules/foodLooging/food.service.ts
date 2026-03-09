@@ -20,102 +20,313 @@ interface MulterFile {
   path: string;
 }
 
+// const addFoodManually = async (
+//   file: any,
+//   payload: Partial<TFood>,
+//   user_id?: Types.ObjectId
+// ) => {
+//   // Validate inputs
+//   if (
+//     !payload ||
+//     !payload.name ||
+//     !payload.servings ||
+//     !payload.nutritionPerServing
+//   ) {
+//     throw new Error('Name, servings, and nutritionPerServing are required.');
+//   }
+
+//   if (
+//     !payload.nutritionPerServing?.calories ||
+//     !payload.nutritionPerServing?.protein ||
+//     !payload.nutritionPerServing?.carbs ||
+//     !payload.nutritionPerServing?.fats ||
+//     !payload.nutritionPerServing?.fiber
+//   ) {
+//     throw new Error(
+//       'All nutritionPerServing fields (calories, protein, carbs, fats, fiber) are required'
+//     );
+//   }
+
+//   if (!file || !file.path) {
+//     throw new Error('Image file is required.');
+//   }
+
+//   const session = await FoodModel.startSession();
+
+//   try {
+//     await session.startTransaction();
+//     console.log('Transaction started for food creation');
+
+//     // Upload image to Cloudinary
+//     const imageName = `${payload.name}-${Date.now()}`; // Unique name
+//     const uploadResult = await uploadImgToCloudinary(imageName, file.path);
+//     const imageUrl = uploadResult.secure_url;
+//     console.log('Image uploaded to Cloudinary:', imageUrl);
+
+//     // Create food payload
+//     const foodPayload: Partial<TFood> = {
+//       ...payload,
+//       img: imageUrl,
+//       ...(user_id && { user_id }), // Include user_id if provided
+//     };
+
+//     // Create and save the food
+//     const food = new FoodModel(foodPayload);
+//     const savedFood = await food.save({ session });
+//     console.log('Food saved:', savedFood._id);
+
+//     // Commit the transaction
+//     await session.commitTransaction();
+//     console.log('Transaction committed');
+
+//     return {
+//       success: true,
+//       message: 'Food created successfully.',
+//       data: {
+//         food: savedFood,
+//       },
+//     };
+//   } catch (error: any) {
+//     await session.abortTransaction();
+//     console.error('Error creating food:', error);
+
+//     // Clean up local file if upload failed
+//     if (file && file.path) {
+//       try {
+//         await deleteFile(file.path);
+//       } catch (deleteError) {
+//         console.error('Error deleting file:', deleteError);
+//       }
+//     }
+
+//     throw new Error(
+//       error.message || 'Failed to create food due to an internal error.'
+//     );
+//   } finally {
+//     session.endSession();
+//     console.log('Session ended');
+//   }
+// };
+
+// create (service) - only name required, always draft at create time
+
 const addFoodManually = async (
-  file: any,
   payload: Partial<TFood>,
+  file?: Express.Multer.File,
   user_id?: Types.ObjectId
 ) => {
-  // Validate inputs
-  if (
-    !payload ||
-    !payload.name ||
-    !payload.servings ||
-    !payload.nutritionPerServing
-  ) {
-    throw new Error('Name, servings, and nutritionPerServing are required.');
-  }
-
-  if (
-    !payload.nutritionPerServing?.calories ||
-    !payload.nutritionPerServing?.protein ||
-    !payload.nutritionPerServing?.carbs ||
-    !payload.nutritionPerServing?.fats ||
-    !payload.nutritionPerServing?.fiber
-  ) {
-    throw new Error(
-      'All nutritionPerServing fields (calories, protein, carbs, fats, fiber) are required'
-    );
-  }
-
-  if (!file || !file.path) {
-    throw new Error('Image file is required.');
+  if (!payload?.name?.trim()) {
+    throw new Error('Food name is required.');
   }
 
   const session = await FoodModel.startSession();
+  session.startTransaction();
 
   try {
-    await session.startTransaction();
-    console.log('Transaction started for food creation');
+    let imageUrl = payload.img || '';
 
-    // Upload image to Cloudinary
-    const imageName = `${payload.name}-${Date.now()}`; // Unique name
-    const uploadResult = await uploadImgToCloudinary(imageName, file.path);
-    const imageUrl = uploadResult.secure_url;
-    console.log('Image uploaded to Cloudinary:', imageUrl);
+    // Upload image if file exists
+    if (file?.path) {
+      const imageName = `${payload.name.trim()}-${Date.now()}`;
+      const uploadResult = await uploadImgToCloudinary(imageName, file.path);
+      imageUrl = uploadResult.secure_url;
+    }
 
-    // Create food payload
     const foodPayload: Partial<TFood> = {
-      ...payload,
+      name: payload.name.trim(),
       img: imageUrl,
-      ...(user_id && { user_id }), // Include user_id if provided
+      user_id,
+      ingredients: payload.ingredients ?? [],
+      instructions: payload.instructions,
+      servings: payload.servings,
+      preparationTime: payload.preparationTime,
+      nutritionPerServing: payload.nutritionPerServing,
+      microNutrients: payload.microNutrients ?? [],
+      status: 'draft',
+      publishedAt: undefined,
     };
 
-    // Create and save the food
-    const food = new FoodModel(foodPayload);
-    const savedFood = await food.save({ session });
-    console.log('Food saved:', savedFood._id);
+    const savedFood = await FoodModel.create([foodPayload], { session });
 
-    // Commit the transaction
     await session.commitTransaction();
-    console.log('Transaction committed');
 
-    return {
-      success: true,
-      message: 'Food created successfully.',
-      data: {
-        food: savedFood,
-      },
-    };
+    return savedFood[0];
+
+    // return {
+    //   success: true,
+    //   message: 'Food draft created successfully.',
+    //   data:
+    // };
   } catch (error: any) {
     await session.abortTransaction();
-    console.error('Error creating food:', error);
 
-    // Clean up local file if upload failed
-    if (file && file.path) {
+    // delete local file if upload fails
+    if (file?.path) {
       try {
         await deleteFile(file.path);
-      } catch (deleteError) {
-        console.error('Error deleting file:', deleteError);
+      } catch (cleanupError) {
+        console.error('File cleanup failed:', cleanupError);
       }
     }
 
-    throw new Error(
-      error.message || 'Failed to create food due to an internal error.'
-    );
+    throw new Error(error?.message || 'Failed to create food');
   } finally {
     session.endSession();
-    console.log('Session ended');
   }
 };
+
+// update (service) - auto publish when required fields become complete
+
 
 const addPersonalizeFoodManually = async (
   file: any,
   payload: Partial<TFood>,
   user_id?: Types.ObjectId
 ) => {
-  const result = await addFoodManually(file, payload, user_id);
-  return result;
+  // const result = await addFoodManually(file, payload, user_id);
+  // return result;
 };
+
+const isPublishReady = (food: {
+  name?: string;
+  servings?: number;
+  preparationTime?: number;
+  nutritionPerServing?: {
+    calories?: number;
+    protein?: number;
+    carbs?: number;
+    fats?: number;
+    fiber?: number;
+  };
+}) => {
+  const n = food.nutritionPerServing;
+  return (
+    !!food.name &&
+    typeof food.servings === 'number' &&
+    typeof food.preparationTime === 'number' &&
+    !!n &&
+    [n.calories, n.protein, n.carbs, n.fats, n.fiber].every(
+      (v) => typeof v === 'number'
+    )
+  );
+};
+
+const updateFood = async (
+  foodId: Types.ObjectId,
+  userId: Types.ObjectId,
+  foodData: FoodData,
+  file?: Express.Multer.File
+): Promise<any> => {
+  try {
+    const food = await FoodModel.findById(foodId);
+    if (!food) throw new Error('Food not found');
+
+    if (food.user_id) {
+      if (!food.user_id.equals(userId)) {
+        throw new Error('Unauthorized: User ID does not match');
+      }
+    } else {
+      const user = await UserModel.findById(userId);
+      if (!user || user.role !== 'admin') {
+        throw new Error('Unauthorized: Only admins can update public food');
+      }
+    }
+
+    let imgUrl = food.img;
+    if (file?.path) {
+      const imageName = `food_${foodId}_${Date.now()}`;
+      const uploadResult = await uploadImgToCloudinary(imageName, file.path);
+      imgUrl = uploadResult.secure_url;
+      await deleteFile(file.path);
+    } else if (foodData.img) {
+      imgUrl = foodData.img;
+    }
+
+    const normalizeMicroNutrients = (
+      input: any
+    ): { name: string; amount: string }[] => {
+      if (!input) return [];
+      if (Array.isArray(input)) {
+        return input.map((item) => ({
+          name: item.name,
+          amount: item.amount.toString(),
+        }));
+      }
+      return Object.entries(input).map(([name, amount]) => ({
+        name,
+        amount: String(amount ?? ''),
+      }));
+    };
+
+    const updateData: any = {
+      name: foodData.name ?? food.name,
+      ingredients: foodData.ingredients ?? food.ingredients,
+      instructions: foodData.instructions ?? food.instructions,
+      servings:
+        typeof foodData.servings === 'string'
+          ? parseInt(foodData.servings, 10)
+          : (foodData.servings ?? food.servings),
+      preparationTime:
+        typeof foodData.preparationTime === 'string'
+          ? parseInt(foodData.preparationTime, 10)
+          : (foodData.preparationTime ?? food.preparationTime),
+      nutritionPerServing: {
+        calories:
+          typeof foodData.nutritionPerServing?.calories === 'string'
+            ? parseFloat(foodData.nutritionPerServing.calories)
+            : (foodData.nutritionPerServing?.calories ?? food.nutritionPerServing?.calories),
+        protein:
+          typeof foodData.nutritionPerServing?.protein === 'string'
+            ? parseFloat(foodData.nutritionPerServing.protein)
+            : (foodData.nutritionPerServing?.protein ?? food.nutritionPerServing?.protein),
+        carbs:
+          typeof foodData.nutritionPerServing?.carbs === 'string'
+            ? parseFloat(foodData.nutritionPerServing.carbs)
+            : (foodData.nutritionPerServing?.carbs ?? food.nutritionPerServing?.carbs),
+        fats:
+          typeof foodData.nutritionPerServing?.fats === 'string'
+            ? parseFloat(foodData.nutritionPerServing.fats)
+            : (foodData.nutritionPerServing?.fats ?? food.nutritionPerServing?.fats),
+        fiber:
+          typeof foodData.nutritionPerServing?.fiber === 'string'
+            ? parseFloat(foodData.nutritionPerServing.fiber)
+            : (foodData.nutritionPerServing?.fiber ?? food.nutritionPerServing?.fiber),
+      },
+      microNutrients: foodData.microNutrients
+        ? normalizeMicroNutrients(foodData.microNutrients)
+        : food.microNutrients,
+      img: imgUrl,
+      updatedAt: new Date(),
+    };
+
+    const nextState = { ...food.toObject(), ...updateData };
+    const ready = isPublishReady(nextState);
+
+    updateData.status = ready ? 'published' : 'draft';
+    updateData.publishedAt = ready ? (food.publishedAt || new Date()) : null;
+
+    const updatedFood = await FoodModel.findOneAndUpdate(
+      { _id: foodId },
+      { $set: updateData },
+      { new: true, runValidators: true }
+    );
+
+    if (!updatedFood) throw new Error('Failed to update food');
+    return updatedFood;
+  } catch (error: any) {
+    if (file?.path) {
+      try {
+        await deleteFile(file.path);
+      } catch {}
+    }
+    throw new Error(error.message || 'Failed to update food');
+  }
+};
+
+
+
+
+
 
 // AI API function to get nutrition data from raw image using fetch
 const getNutritionFromAI = async (file: MulterFile) => {
@@ -328,11 +539,11 @@ const addConsumedFoodFromImgOrQRCodeOrFoodId = async (
       if (!food) throw new Error('Food not found with food_id');
 
       nutritionPerServing = {
-        calories: food.nutritionPerServing.calories * servings,
-        protein: food.nutritionPerServing.protein * servings,
-        carbs: food.nutritionPerServing.carbs * servings,
-        fats: food.nutritionPerServing.fats * servings,
-        fiber: food.nutritionPerServing.fiber * servings,
+        calories: (food.nutritionPerServing as any).calories * servings,
+        protein: (food.nutritionPerServing as any).protein * servings,
+        carbs: (food.nutritionPerServing as any).carbs * servings,
+        fats: (food.nutritionPerServing as any).fats * servings,
+        fiber: (food.nutritionPerServing as any).fiber * servings,
       };
 
       if (parsedData?.microNutrients) {
@@ -349,7 +560,7 @@ const addConsumedFoodFromImgOrQRCodeOrFoodId = async (
           );
         }
       }
-      servings = parsedData?.servings || food.servings;
+      servings = parsedData?.servings || (food.servings as any);
     } else {
       throw new Error(
         'Invalid input: Provide a valid file, nutrition data, or food_id'
@@ -457,145 +668,145 @@ interface FoodData {
   img?: string; // Optional URL if no file uploaded
 }
 
-const updateFood = async (
-  foodId: Types.ObjectId,
-  userId: Types.ObjectId,
-  foodData: FoodData,
-  file?: Express.Multer.File
-): Promise<any> => {
-  try {
-    // Find food item
-    const food = await FoodModel.findById(foodId);
-    if (!food) {
-      throw new Error('Food not found');
-    }
+// const updateFood = async (
+//   foodId: Types.ObjectId,
+//   userId: Types.ObjectId,
+//   foodData: FoodData,
+//   file?: Express.Multer.File
+// ): Promise<any> => {
+//   try {
+//     // Find food item
+//     const food = await FoodModel.findById(foodId);
+//     if (!food) {
+//       throw new Error('Food not found');
+//     }
 
-    // Check authorization
-    if (food.user_id) {
-      if (!food.user_id.equals(userId)) {
-        throw new Error('Unauthorized: User ID does not match');
-      }
-    } else {
-      // Public food (user_id: null), check if user is admin
-      const user = await UserModel.findById(userId);
-      if (!user || user.role !== 'admin') {
-        throw new Error('Unauthorized: Only admins can update public food');
-      }
-    }
+//     // Check authorization
+//     if (food.user_id) {
+//       if (!food.user_id.equals(userId)) {
+//         throw new Error('Unauthorized: User ID does not match');
+//       }
+//     } else {
+//       // Public food (user_id: null), check if user is admin
+//       const user = await UserModel.findById(userId);
+//       if (!user || user.role !== 'admin') {
+//         throw new Error('Unauthorized: Only admins can update public food');
+//       }
+//     }
 
-    // Handle image upload
-    let imgUrl = food.img;
-    if (file) {
-      try {
-        const imageName = `food_${foodId}_${Date.now()}`; // Unique name
-        const uploadResult = await uploadImgToCloudinary(imageName, file.path);
-        imgUrl = uploadResult.secure_url;
-        await deleteFile(file.path); // Delete temp file
-      } catch (error) {
-        console.error('Error uploading to Cloudinary:', error);
-        throw new Error('Failed to upload image');
-      }
-    } else if (foodData.img) {
-      imgUrl = foodData.img; // Use provided URL if no file
-    }
+//     // Handle image upload
+//     let imgUrl = food.img;
+//     if (file) {
+//       try {
+//         const imageName = `food_${foodId}_${Date.now()}`; // Unique name
+//         const uploadResult = await uploadImgToCloudinary(imageName, file.path);
+//         imgUrl = uploadResult.secure_url;
+//         await deleteFile(file.path); // Delete temp file
+//       } catch (error) {
+//         console.error('Error uploading to Cloudinary:', error);
+//         throw new Error('Failed to upload image');
+//       }
+//     } else if (foodData.img) {
+//       imgUrl = foodData.img; // Use provided URL if no file
+//     }
 
-    console.log('incoming food data is here =====>>>>>>>', foodData.name);
+//     console.log('incoming food data is here =====>>>>>>>', foodData.name);
 
-    const normalizeMicroNutrients = (
-      input: any
-    ): { name: string; amount: string }[] => {
-      if (!input) return [];
+//     const normalizeMicroNutrients = (
+//       input: any
+//     ): { name: string; amount: string }[] => {
+//       if (!input) return [];
 
-      // Case A: already array
-      if (Array.isArray(input)) {
-        return input.map((item) => ({
-          name: item.name,
-          amount: item.amount.toString(),
-        }));
-      }
+//       // Case A: already array
+//       if (Array.isArray(input)) {
+//         return input.map((item) => ({
+//           name: item.name,
+//           amount: item.amount.toString(),
+//         }));
+//       }
 
-      // Case B: object style { sodium: 30, potassium: 200 }
-      // @ts-ignore
-      return Object.entries(input).map(([name, amount]) => ({
-        name,
-        amount: amount?.toString(),
-      }));
-    };
+//       // Case B: object style { sodium: 30, potassium: 200 }
+//       // @ts-ignore
+//       return Object.entries(input).map(([name, amount]) => ({
+//         name,
+//         amount: amount?.toString(),
+//       }));
+//     };
 
-    // Prepare update data with type conversion
-    const updateData = {
-      name: foodData.name || food.name,
-      ingredients: foodData.ingredients || food.ingredients,
-      instructions: foodData.instructions || food.instructions,
-      servings:
-        typeof foodData.servings === 'string'
-          ? parseInt(foodData.servings, 10)
-          : foodData.servings || food.servings,
-      preparationTime:
-        typeof foodData.preparationTime === 'string'
-          ? parseInt(foodData.preparationTime, 10)
-          : foodData.preparationTime || food.preparationTime,
-      nutritionPerServing: {
-        calories:
-          typeof foodData.nutritionPerServing?.calories === 'string'
-            ? parseFloat(foodData.nutritionPerServing.calories)
-            : foodData.nutritionPerServing?.calories ||
-              food.nutritionPerServing.calories,
-        protein:
-          typeof foodData.nutritionPerServing?.protein === 'string'
-            ? parseFloat(foodData.nutritionPerServing.protein)
-            : foodData.nutritionPerServing?.protein ||
-              food.nutritionPerServing.protein,
-        carbs:
-          typeof foodData.nutritionPerServing?.carbs === 'string'
-            ? parseFloat(foodData.nutritionPerServing.carbs)
-            : foodData.nutritionPerServing?.carbs ||
-              food.nutritionPerServing.carbs,
-        fats:
-          typeof foodData.nutritionPerServing?.fats === 'string'
-            ? parseFloat(foodData.nutritionPerServing.fats)
-            : foodData.nutritionPerServing?.fats ||
-              food.nutritionPerServing.fats,
-        fiber:
-          typeof foodData.nutritionPerServing?.fiber === 'string'
-            ? parseFloat(foodData.nutritionPerServing.fiber)
-            : foodData.nutritionPerServing?.fiber ||
-              food.nutritionPerServing.fiber,
-      },
-      microNutrients: foodData.microNutrients
-        ? normalizeMicroNutrients(foodData.microNutrients)
-        : food.microNutrients,
-      img: imgUrl,
-      updatedAt: new Date(), // Explicitly set for debugging
-    };
+//     // Prepare update data with type conversion
+//     const updateData = {
+//       name: foodData.name || food.name,
+//       ingredients: foodData.ingredients || food.ingredients,
+//       instructions: foodData.instructions || food.instructions,
+//       servings:
+//         typeof foodData.servings === 'string'
+//           ? parseInt(foodData.servings, 10)
+//           : foodData.servings || food.servings,
+//       preparationTime:
+//         typeof foodData.preparationTime === 'string'
+//           ? parseInt(foodData.preparationTime, 10)
+//           : foodData.preparationTime || food.preparationTime,
+//       nutritionPerServing: {
+//         calories:
+//           typeof foodData.nutritionPerServing?.calories === 'string'
+//             ? parseFloat(foodData.nutritionPerServing.calories)
+//             : foodData.nutritionPerServing?.calories ||
+//               (food.nutritionPerServing as any).calories,
+//         protein:
+//           typeof foodData.nutritionPerServing?.protein === 'string'
+//             ? parseFloat(foodData.nutritionPerServing.protein)
+//             : foodData.nutritionPerServing?.protein ||
+//               (food.nutritionPerServing as any).protein,
+//         carbs:
+//           typeof foodData.nutritionPerServing?.carbs === 'string'
+//             ? parseFloat(foodData.nutritionPerServing.carbs)
+//             : foodData.nutritionPerServing?.carbs ||
+//               (food.nutritionPerServing as any).carbs,
+//         fats:
+//           typeof foodData.nutritionPerServing?.fats === 'string'
+//             ? parseFloat(foodData.nutritionPerServing.fats)
+//             : foodData.nutritionPerServing?.fats ||
+//               (food.nutritionPerServing as any).fats,
+//         fiber:
+//           typeof foodData.nutritionPerServing?.fiber === 'string'
+//             ? parseFloat(foodData.nutritionPerServing.fiber)
+//             : foodData.nutritionPerServing?.fiber ||
+//               (food.nutritionPerServing as any).fiber,
+//       },
+//       microNutrients: foodData.microNutrients
+//         ? normalizeMicroNutrients(foodData.microNutrients)
+//         : food.microNutrients,
+//       img: imgUrl,
+//       updatedAt: new Date(), // Explicitly set for debugging
+//     };
 
-    console.log('data to be updated is here =====>>>>', updateData);
+//     console.log('data to be updated is here =====>>>>', updateData);
 
-    // Update food item with $set
-    const updatedFood = await FoodModel.findOneAndUpdate(
-      { _id: foodId },
-      { $set: updateData },
-      { new: true, runValidators: true }
-    );
+//     // Update food item with $set
+//     const updatedFood = await FoodModel.findOneAndUpdate(
+//       { _id: foodId },
+//       { $set: updateData },
+//       { new: true, runValidators: true }
+//     );
 
-    if (!updatedFood) {
-      throw new Error('Failed to update food: Document not found');
-    }
+//     if (!updatedFood) {
+//       throw new Error('Failed to update food: Document not found');
+//     }
 
-    return updatedFood;
-  } catch (error: any) {
-    // Clean up local file if upload failed
-    if (file && file.path) {
-      try {
-        await deleteFile(file.path);
-      } catch (deleteError) {
-        console.error('Error deleting file:', deleteError);
-      }
-    }
-    console.error(`Error updating food ${foodId}:`, error);
-    throw new Error(error.message || 'Failed to update food');
-  }
-};
+//     return updatedFood;
+//   } catch (error: any) {
+//     // Clean up local file if upload failed
+//     if (file && file.path) {
+//       try {
+//         await deleteFile(file.path);
+//       } catch (deleteError) {
+//         console.error('Error deleting file:', deleteError);
+//       }
+//     }
+//     console.error(`Error updating food ${foodId}:`, error);
+//     throw new Error(error.message || 'Failed to update food');
+//   }
+// };
 
 const deleteFood = async (
   foodId: Types.ObjectId,

@@ -7,7 +7,7 @@ const foodRoutes = express.Router();
 
 foodRoutes.post(
   '/addFoodManually',
-  auth([userRole.admin]),
+  auth([userRole.admin, userRole.user]),
   upload.single('file'),
   foodLoaderController.addFoodManually,
 );

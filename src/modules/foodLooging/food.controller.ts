@@ -1,27 +1,57 @@
+/* eslint-disable @typescript-eslint/no-explicit-any */
 import { Types } from 'mongoose';
 import catchAsync from '../../util/catchAsync';
 import idConverter from '../../util/idConvirter';
 import foodLoadingServices from './food.service';
 
+// const addFoodManually = catchAsync(async (req, res) => {
+//   const file = req.file;
+//   if (!file) {
+//     throw new Error('Image file is required');
+//   }
+
+//   const data = req.body.data;
+//   if (!data) {
+//     throw new Error('Data must be provided');
+//   }
+
+//   const parsedData = JSON.parse(data);
+
+//   const result = await foodLoadingServices.addFoodManually(file, parsedData);
+
+//   res.status(200).json({
+//     status: 'success',
+//     message: 'Food created successfully',
+//     data: result.data.food,
+//   });
+// });
+
 const addFoodManually = catchAsync(async (req, res) => {
-  const file = req.file;
-  if (!file) {
-    throw new Error('Image file is required');
+  const file = req.file || null;
+
+  let parsedData;
+
+  // যদি form-data থেকে আসে
+  if (req.body.data) {
+    parsedData = JSON.parse(req.body.data);
+  }
+  // যদি raw JSON আসে
+  else {
+    parsedData = req.body;
   }
 
-  const data = req.body.data;
-  if (!data) {
-    throw new Error('Data must be provided');
-  }
+  const result = await foodLoadingServices.addFoodManually(
+    parsedData,
+    file as any,
+    req.user?.id
+  );
 
-  const parsedData = JSON.parse(data);
-
-  const result = await foodLoadingServices.addFoodManually(file, parsedData);
+  // console.log(parsedData, file, req.user?.id);
 
   res.status(200).json({
     status: 'success',
-    message: 'Food created successfully',
-    data: result.data.food,
+    message: `Food ${result?.status} successfully`,
+    data: result,
   });
 });
 
@@ -45,11 +75,11 @@ const addPersonalizeFoodManually = catchAsync(async (req, res) => {
     user_id
   );
 
-  res.status(200).json({
-    status: 'success',
-    message: 'personalize Food created successfully',
-    data: result.data.food,
-  });
+  // res.status(200).json({
+  //   status: 'success',
+  //   message: 'personalize Food created successfully',
+  //   data: result.data.food,
+  // });
 });
 
 const addConsumedFoodFromImgOrQRCodeOrFoodId = catchAsync(async (req, res) => {
@@ -103,7 +133,10 @@ const deleteConsumedFood = catchAsync(async (req, res) => {
   const foodId = req.params.id;
   if (!foodId) throw new Error('Consumed food ID is required');
 
-  const result = await foodLoadingServices.deleteConsumedFood(foodId as string, user_id);
+  const result = await foodLoadingServices.deleteConsumedFood(
+    foodId as string,
+    user_id
+  );
 
   res.status(200).json({
     status: 'success',
@@ -127,15 +160,40 @@ const getAllFood = catchAsync(async (req, res) => {
 const updateFood = catchAsync(async (req, res) => {
   const foodId = req.query.foodId as string;
   const userId = req.user?.id as string;
-  const foodData = JSON.parse(req.body.data || '{}'); // Parse food data from request body
-  const file = req.file; // From multer for image upload
+  const file = req.file; // optional (photo-only support)
 
   if (!userId) {
     throw new Error('User ID is required');
   }
+  if (!foodId || !Types.ObjectId.isValid(foodId)) {
+    throw new Error('Invalid food ID');
+  }
 
-  if (typeof userId !== 'string') {
-    throw new Error('Invalid user ID');
+  // Supports both:
+  // 1) multipart/form-data -> req.body.data (JSON string) OR normal form fields
+  // 2) application/json    -> req.body مستقیم object
+  let foodData: Record<string, any> = {};
+
+  const contentType = (req.headers['content-type'] || '').toLowerCase();
+  if (contentType.includes('multipart/form-data')) {
+    if (req.body?.data) {
+      try {
+        foodData = JSON.parse(req.body.data);
+      } catch {
+        throw new Error('Invalid JSON in form-data "data" field');
+      }
+    } else {
+      // if client sends plain form fields without data JSON
+      foodData = { ...req.body };
+    }
+  } else {
+    // application/json
+    foodData = req.body && typeof req.body === 'object' ? req.body : {};
+  }
+
+  // must have at least one update source: file or data
+  if (!file && Object.keys(foodData).length === 0) {
+    throw new Error('Provide at least one of: photo file or update data');
   }
 
   let convertedUserId: Types.ObjectId;
@@ -143,12 +201,8 @@ const updateFood = catchAsync(async (req, res) => {
   try {
     convertedUserId = idConverter(userId) as Types.ObjectId;
     convertedFoodId = idConverter(foodId) as Types.ObjectId;
-  } catch (error) {
-    throw new Error('Invalid user ID format');
-  }
-
-  if (!Types.ObjectId.isValid(foodId)) {
-    throw new Error('Invalid food ID');
+  } catch {
+    throw new Error('Invalid ID format');
   }
 
   const updatedFood = await foodLoadingServices.updateFood(
@@ -159,8 +213,8 @@ const updateFood = catchAsync(async (req, res) => {
   );
 
   res.status(200).json({
-    success: true,
-    message: 'Food updated successfully',
+    status: 'success',
+    message: `Food updated successfully. Status currently is ${updatedFood.status}`,
     data: updatedFood,
   });
 });
