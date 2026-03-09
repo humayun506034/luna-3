@@ -2,7 +2,9 @@
 import { Types } from 'mongoose';
 import catchAsync from '../../util/catchAsync';
 import idConverter from '../../util/idConvirter';
-import foodLoadingServices from './food.service';
+import foodLoadingServices, {
+  assertFoodPublishReadyById,
+} from './food.service';
 
 // const addFoodManually = catchAsync(async (req, res) => {
 //   const file = req.file;
@@ -110,20 +112,24 @@ const addConsumedFoodFromImgOrQRCodeOrFoodId = catchAsync(async (req, res) => {
     throw new Error('any of the required field went missing ');
   }
 
-  const result =
-    await foodLoadingServices.addConsumedFoodFromImgOrQRCodeOrFoodId(
-      convertedUserId,
-      consumedAs,
-      file,
-      parsedData,
-      convertedFood_id
-    );
+  const isFoodReady = await assertFoodPublishReadyById(food_id); // throw করবে বা true দিবে
 
-  res.status(200).json({
-    status: 'success',
-    message: 'Food consumed successfully',
-    data: result,
-  });
+  if (isFoodReady === true) {
+    const result =
+      await foodLoadingServices.addConsumedFoodFromImgOrQRCodeOrFoodId(
+        convertedUserId,
+        consumedAs,
+        file,
+        parsedData,
+        convertedFood_id
+      );
+
+    res.status(200).json({
+      status: 'success',
+      message: 'Food consumed successfully',
+      data: result,
+    });
+  }
 });
 
 const deleteConsumedFood = catchAsync(async (req, res) => {

@@ -323,6 +323,69 @@ const updateFood = async (
   }
 };
 
+export const assertFoodPublishReadyById = async (
+  foodId: string | Types.ObjectId
+): Promise<true> => {
+  const id = String(foodId);
+
+  if (!Types.ObjectId.isValid(id)) {
+    throw new Error('Invalid food id');
+  }
+
+  const food = await FoodModel.findById(id).lean();
+  if (!food) {
+    throw new Error('Food not found');
+  }
+
+  const missing: string[] = [];
+
+  if (!food.name || !String(food.name).trim()) missing.push('name');
+
+  if (typeof food.servings !== 'number' || Number.isNaN(food.servings)) {
+    missing.push('servings');
+  }
+
+  if (
+    typeof food.preparationTime !== 'number' ||
+    Number.isNaN(food.preparationTime)
+  ) {
+    missing.push('preparationTime');
+  }
+
+  const n = food.nutritionPerServing as
+    | {
+        calories?: number;
+        protein?: number;
+        carbs?: number;
+        fats?: number;
+        fiber?: number;
+      }
+    | undefined;
+
+  if (!n) {
+    missing.push('nutritionPerServing');
+  } else {
+    if (typeof n.calories !== 'number' || Number.isNaN(n.calories))
+      missing.push('nutritionPerServing.calories');
+    if (typeof n.protein !== 'number' || Number.isNaN(n.protein))
+      missing.push('nutritionPerServing.protein');
+    if (typeof n.carbs !== 'number' || Number.isNaN(n.carbs))
+      missing.push('nutritionPerServing.carbs');
+    if (typeof n.fats !== 'number' || Number.isNaN(n.fats))
+      missing.push('nutritionPerServing.fats');
+    if (typeof n.fiber !== 'number' || Number.isNaN(n.fiber))
+      missing.push('nutritionPerServing.fiber');
+  }
+
+  if (missing.length) {
+    throw new Error(
+      `Food is not publish yet, this is not consumed ready. Missing/invalid fields: ${missing.join(', ')}`
+    );
+  }
+
+  return true;
+};
+
 
 
 
