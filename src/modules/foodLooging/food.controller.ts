@@ -71,11 +71,11 @@ const addPersonalizeFoodManually = catchAsync(async (req, res) => {
   const parsedData = JSON.parse(data);
   const user_id = req.user?.id; // Assuming user_id is available from auth middleware
 
-  const result = await foodLoadingServices.addPersonalizeFoodManually(
-    file,
-    parsedData,
-    user_id
-  );
+  // const result = await foodLoadingServices.addPersonalizeFoodManually(
+  //   file,
+  //   parsedData,
+  //   user_id
+  // );
 
   // res.status(200).json({
   //   status: 'success',
@@ -84,53 +84,115 @@ const addPersonalizeFoodManually = catchAsync(async (req, res) => {
   // });
 });
 
+// const addConsumedFoodFromImgOrQRCodeOrFoodId = catchAsync(async (req, res) => {
+//   const file = req.file;
+//   const data = req.body.data;
+//   const consumedAs = req.query.consumedAs as
+//     | 'breakfast'
+//     | 'lunch'
+//     | 'dinner'
+//     | 'snack';
+//   if (!consumedAs) {
+//     throw new Error('consumed as must be there');
+//   }
+//   let parsedData;
+//   let convertedFood_id;
+//   if (data) {
+//     parsedData = JSON.parse(data);
+//   }
+//   const food_id = req.query.food_id as string;
+//   if (food_id) {
+//     convertedFood_id = idConverter(food_id) as Types.ObjectId;
+//   }
+
+//   const user_id = req.user?.id;
+//   const convertedUserId = idConverter(user_id) as Types.ObjectId;
+
+//   if (!convertedUserId && (!file || !parsedData || !convertedFood_id)) {
+//     throw new Error('any of the required field went missing ');
+//   }
+
+//   const isFoodReady = await assertFoodPublishReadyById(food_id); // throw করবে বা true দিবে
+
+//   if (isFoodReady === true) {
+//     const result =
+//       await foodLoadingServices.addConsumedFoodFromImgOrQRCodeOrFoodId(
+//         convertedUserId,
+//         consumedAs,
+//         file,
+//         parsedData,
+//         convertedFood_id
+//       );
+
+//     res.status(200).json({
+//       status: 'success',
+//       message: 'Food consumed successfully',
+//       data: result,
+//     });
+//   }
+// });
+
+
 const addConsumedFoodFromImgOrQRCodeOrFoodId = catchAsync(async (req, res) => {
   const file = req.file;
   const data = req.body.data;
+
   const consumedAs = req.query.consumedAs as
     | 'breakfast'
     | 'lunch'
     | 'dinner'
     | 'snack';
+
   if (!consumedAs) {
-    throw new Error('consumed as must be there');
-  }
-  let parsedData;
-  let convertedFood_id;
-  if (data) {
-    parsedData = JSON.parse(data);
-  }
-  const food_id = req.query.food_id as string;
-  if (food_id) {
-    convertedFood_id = idConverter(food_id) as Types.ObjectId;
+    throw new Error('consumedAs is required');
   }
 
   const user_id = req.user?.id;
+  if (!user_id) {
+    throw new Error('Unauthorized');
+  }
+
   const convertedUserId = idConverter(user_id) as Types.ObjectId;
 
-  if (!convertedUserId && (!file || !parsedData || !convertedFood_id)) {
-    throw new Error('any of the required field went missing ');
+  let parsedData: any;
+  if (data) {
+    try {
+      parsedData = JSON.parse(data);
+    } catch {
+      throw new Error('Invalid JSON in data field');
+    }
   }
 
-  const isFoodReady = await assertFoodPublishReadyById(food_id); // throw করবে বা true দিবে
+  const food_id = req.query.food_id as string | undefined;
+  let convertedFood_id: Types.ObjectId | undefined;
 
-  if (isFoodReady === true) {
-    const result =
-      await foodLoadingServices.addConsumedFoodFromImgOrQRCodeOrFoodId(
-        convertedUserId,
-        consumedAs,
-        file,
-        parsedData,
-        convertedFood_id
-      );
+  if (food_id) {
+    convertedFood_id = idConverter(food_id) as Types.ObjectId;
 
-    res.status(200).json({
-      status: 'success',
-      message: 'Food consumed successfully',
-      data: result,
-    });
+    // Only check publish-ready when food_id is provided
+    await assertFoodPublishReadyById(food_id);
   }
+
+  // Must provide at least one input source
+  if (!file && !parsedData && !convertedFood_id) {
+    throw new Error('At least one of file, data, or food_id is required');
+  }
+
+  const result = await foodLoadingServices.addConsumedFoodFromImgOrQRCodeOrFoodId(
+    convertedUserId,
+    consumedAs,
+    file as any,
+    parsedData,
+    convertedFood_id
+  );
+
+  res.status(200).json({
+    status: 'success',
+    message: 'Food consumed successfully',
+    data: result,
+  });
 });
+
 
 const deleteConsumedFood = catchAsync(async (req, res) => {
   const user_id = req.user?.id;

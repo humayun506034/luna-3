@@ -125,7 +125,6 @@ const addFoodManually = async (
   try {
     let imageUrl = payload.img || '';
 
-    // Upload image if file exists
     if (file?.path) {
       const imageName = `${payload.name.trim()}-${Date.now()}`;
       const uploadResult = await uploadImgToCloudinary(imageName, file.path);
@@ -178,9 +177,9 @@ const addFoodManually = async (
 // update (service) - auto publish when required fields become complete
 
 const addPersonalizeFoodManually = async (
-  file: any,
-  payload: Partial<TFood>,
-  user_id?: Types.ObjectId
+  // file: any,
+  // payload: Partial<TFood>,
+  // user_id?: Types.ObjectId
 ) => {
   // const result = await addFoodManually(file, payload, user_id);
   // return result;
