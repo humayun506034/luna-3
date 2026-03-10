@@ -176,14 +176,14 @@ const addFoodManually = async (
 
 // update (service) - auto publish when required fields become complete
 
-const addPersonalizeFoodManually = async (
+const addPersonalizeFoodManually = async () =>
   // file: any,
   // payload: Partial<TFood>,
   // user_id?: Types.ObjectId
-) => {
-  // const result = await addFoodManually(file, payload, user_id);
-  // return result;
-};
+  {
+    // const result = await addFoodManually(file, payload, user_id);
+    // return result;
+  };
 
 const isPublishReady = (food: {
   name?: string;
@@ -766,7 +766,7 @@ const getAllFood = async (
     const query: any = {
       $or: [
         { user_id: user_id }, // Personalized food
-        { user_id: null },    // Common food
+        { user_id: null }, // Common food
       ],
     };
 
@@ -775,9 +775,7 @@ const getAllFood = async (
       query.status = status;
     }
 
-    const foods = await FoodModel.find(query)
-      .lean()
-      .sort({ user_id: -1 }); // personalized first
+    const foods = await FoodModel.find(query).lean().sort({ user_id: -1 }); // personalized first
 
     return foods;
   } catch (error: any) {
@@ -785,7 +783,6 @@ const getAllFood = async (
     throw new Error(error.message || 'Failed to fetch food');
   }
 };
-
 
 interface FoodData {
   name?: string;
