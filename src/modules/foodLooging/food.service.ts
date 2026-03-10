@@ -421,7 +421,7 @@ const getNutritionFromAI = async (file: MulterFile) => {
       body: formData,
     });
 
-    console.log('AI response status:', response.status, response.statusText);
+    // console.log('AI response status:', response.status, response.statusText);
 
     if (!response.ok) {
       // Log response body for errors
