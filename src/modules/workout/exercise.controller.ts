@@ -648,6 +648,24 @@ const listLiftLists = catchAsync(async (req, res) => {
   });
 });
 
+const getSingleLiftList = catchAsync(async (req, res) => {
+  const userId = req.user?.id;
+  if (!userId || !Types.ObjectId.isValid(userId)) {
+    throw new Error('User not authenticated.');
+  }
+  const convertedUserId = idConverter(userId) as Types.ObjectId;
+
+  const data = await exerciseServicves.liftLists.getSingleList(
+    convertedUserId,
+    req.params.id as any
+  );
+  res.status(200).json({
+    success: true,
+    message: 'Single Lift list fetched successfully',
+    data,
+  });
+})
+
 const addLiftListItem = catchAsync(async (req, res) => {
   const userId = req.user?.id;
   if (!userId || !Types.ObjectId.isValid(userId)) {
@@ -758,6 +776,7 @@ const exerciseController = {
   workoutAnalysis,
   createLiftList,
   listLiftLists,
+  getSingleLiftList,
   addLiftListItem,
   removeLiftListItem,
   deleteLiftList,

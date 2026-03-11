@@ -216,6 +216,11 @@ exerciseRoutes.post(
 );
 
 exerciseRoutes.get(
+  '/lift-lists/:id',
+  auth([userRole.user, userRole.admin]),
+  exerciseController.getSingleLiftList
+);
+exerciseRoutes.get(
   '/lift-lists',
   auth([userRole.user, userRole.admin]),
   exerciseController.listLiftLists

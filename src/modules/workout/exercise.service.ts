@@ -479,10 +479,18 @@ const liftListSchema = new mongoose.Schema(
       enum: ['workout', 'running'],
       default: 'workout',
     },
+    // liftListSchema itemIds
     itemIds: {
-      type: [String],
+      type: [
+        {
+          type: mongoose.Schema.Types.ObjectId,
+          ref: 'UserExercisePerformModel',
+        },
+      ],
+      required: false,
       default: [],
     },
+
     isDeleted: {
       type: Boolean,
       default: false,
@@ -1054,8 +1062,8 @@ const getPerformedExerciseById = async (
 };
 
 const getAllPerformedExercise = async (
-  userId: Types.ObjectId,
-  role?: string
+  userId: Types.ObjectId
+  // role?: string
 ) => {
   const exercises = await UserExercisePerformModel.find({
     user_id: userId,
@@ -1833,11 +1841,86 @@ const liftLists = {
     WorkoutLiftListModel.find({
       user_id,
       isDeleted: false,
-    }).sort({ createdAt: -1 }),
+    })
+      .populate({
+        path: 'itemIds',
+        model: 'UserExercisePerformModel',
+        select:
+          'exercise_id set reps resetTime weightLifted distance totalCaloryBurn isCompleted image note createdAt',
+      })
+      .sort({ createdAt: -1 }),
+  getSingleList: async (user_id: Types.ObjectId, id: Types.ObjectId) =>
+    WorkoutLiftListModel.findOne({
+      _id: id,
+      user_id,
+      isDeleted: false,
+    }).populate({
+      path: 'itemIds',
+      model: 'UserExercisePerformModel',
+      select:
+        'exercise_id set reps resetTime weightLifted distance totalCaloryBurn isCompleted image note createdAt',
+    }),
+
+  // addItem: async (user_id: Types.ObjectId, id: string, itemId: string) => {
+  //   if (!itemId) {
+  //     throw new ApppError(400, 'itemId is required');
+  //   }
+
+  //   console.log(itemId)
+
+  //   if (!Types.ObjectId.isValid(itemId)) {
+  //     throw new ApppError(400, 'Invalid itemId');
+  //   }
+
+  //   const doc = await WorkoutLiftListModel.findOne({
+  //     _id: parseLiftListId(id),
+  //     user_id,
+  //     isDeleted: false,
+  //   });
+
+  //   if (!doc) throw new ApppError(404, 'Lift list not found');
+
+  //   const before = doc.toObject();
+
+  //   const normalizedItemIds = (doc.itemIds ?? []).map((x: any) => x.toString());
+  //   const itemSet = new Set<string>(normalizedItemIds);
+  //   itemSet.add(itemId);
+
+  //   doc.itemIds = Array.from(itemSet).map((x) => new Types.ObjectId(x));
+
+  //   doc.history = [
+  //     ...(doc.history ?? []),
+  //     {
+  //       action: 'update',
+  //       before,
+  //       after: doc.toObject(),
+  //       undone: false,
+  //       createdAt: new Date(),
+  //     },
+  //   ];
+
+  //   await doc.save();
+  //   return doc;
+  // },
 
   addItem: async (user_id: Types.ObjectId, id: string, itemId: string) => {
+    // console.log('🚀 ~ itemId:', itemId);
+
+    const isItemExist = await UserExercisePerformModel.findOne({
+      _id: new Types.ObjectId(itemId),
+      user_id: user_id,
+    });
+    // console.log("🚀 ~ isItemExist:", isItemExist)
+
+    if (!isItemExist) {
+      throw new ApppError(404, 'Item not found');
+    }
     if (!itemId) {
       throw new ApppError(400, 'itemId is required');
+    }
+
+    if (!Types.ObjectId.isValid(itemId)) {
+      throw new ApppError(400, 'Invalid itemId');
     }
 
     const doc = await WorkoutLiftListModel.findOne({
@@ -1848,10 +1931,17 @@ const liftLists = {
 
     if (!doc) throw new ApppError(404, 'Lift list not found');
 
+    const normalizedItemIds = (doc.itemIds ?? []).map((x: any) => x.toString());
+    const alreadyExists = normalizedItemIds.includes(itemId);
+
+    // duplicate prevent
+    if (alreadyExists) {
+      throw new ApppError(409, 'This item is already in the lift list');
+    }
+
     const before = doc.toObject();
-    const itemSet = new Set<string>(doc.itemIds ?? []);
-    itemSet.add(itemId);
-    doc.itemIds = Array.from(itemSet);
+
+    doc.itemIds = [...(doc.itemIds ?? []), new Types.ObjectId(itemId)];
 
     doc.history = [
       ...(doc.history ?? []),
