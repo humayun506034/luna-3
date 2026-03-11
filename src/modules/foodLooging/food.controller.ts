@@ -212,6 +212,23 @@ const deleteConsumedFood = catchAsync(async (req, res) => {
   });
 });
 
+const undoConsumedFood = catchAsync(async (req, res) => {
+  const user_id = req.user?.id;
+  if (!user_id) throw new Error('Unauthorized');
+
+  const foodId = req.params.id;
+  if (!foodId) throw new Error('Consumed food ID is required');
+
+  const result = await foodLoadingServices.undoConsumedFood(foodId as string, user_id);
+
+  res.status(200).json({
+    status: 'success',
+    message: result.message,
+    data: result.data,
+  });
+});
+
+
 const getAllFood = catchAsync(async (req, res) => {
   const user_id = req.user.id as string;
   const convertedId = idConverter(user_id) as Types.ObjectId;
@@ -326,6 +343,7 @@ const foodLoaderController = {
   updateFood,
   deleteFood,
   deleteConsumedFood,
+  undoConsumedFood,
   analyzeFoodIngredient,
 };
 

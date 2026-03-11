@@ -62,6 +62,27 @@ export type TFood = {
   publishedAt?: Date | null;
 };
 
+// export type TUserConsumedFood = {
+//   user_id: Types.ObjectId;
+//   consumedAs: 'breakfast' | 'lunch' | 'dinner' | 'snack';
+//   nutritionPerServing: {
+//     calories: number;
+//     protein: number;
+//     carbs: number;
+//     fats: number;
+//     fiber: number;
+//   };
+//   microNutrients?: TMicroNutrient[];
+//   servings: number;
+// };
+
+export type TUserConsumedFoodHistory = {
+  action: 'create' | 'update' | 'delete';
+  before: Record<string, unknown> | null;
+  after: Record<string, unknown> | null;
+  undone?: boolean;
+  createdAt?: Date;
+};
 export type TUserConsumedFood = {
   user_id: Types.ObjectId;
   consumedAs: 'breakfast' | 'lunch' | 'dinner' | 'snack';
@@ -74,4 +95,8 @@ export type TUserConsumedFood = {
   };
   microNutrients?: TMicroNutrient[];
   servings: number;
+
+  // undo support
+  isDeleted?: boolean;
+  history?: TUserConsumedFoodHistory[];
 };

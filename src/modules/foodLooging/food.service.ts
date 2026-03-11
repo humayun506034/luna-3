@@ -651,14 +651,33 @@ const addConsumedFoodFromImgOrQRCodeOrFoodId = async (
       })
     );
 
-    const consumedFoodPayload: TUserConsumedFood = {
+    const createSnapshot = {
       user_id,
       consumedAs,
       nutritionPerServing,
       microNutrients: microNutrientsArray,
       servings,
     };
-
+    // const consumedFoodPayload: TUserConsumedFood = {
+    //   user_id,
+    //   consumedAs,
+    //   nutritionPerServing,
+    //   microNutrients: microNutrientsArray,
+    //   servings,
+    // };
+    const consumedFoodPayload: TUserConsumedFood = {
+      ...createSnapshot,
+      isDeleted: false,
+      history: [
+        {
+          action: 'create',
+          before: null,
+          after: createSnapshot, // <- not consumedFoodPayload
+          undone: false,
+          createdAt: new Date(),
+        },
+      ],
+    };
     const consumedFood = new UserConsumedFoodModel(consumedFoodPayload);
     const savedConsumedFood = await consumedFood.save();
 
@@ -669,24 +688,24 @@ const addConsumedFoodFromImgOrQRCodeOrFoodId = async (
   }
 };
 
-const deleteConsumedFood = async (foodId: string, user_id?: string) => {
-  if (!user_id) throw new Error('Unauthorized');
+// const deleteConsumedFood = async (foodId: string, user_id?: string) => {
+//   if (!user_id) throw new Error('Unauthorized');
 
-  // Validate ObjectId format (optional but recommended)
-  if (!Types.ObjectId.isValid(foodId)) {
-    throw new Error('Invalid food ID');
-  }
+//   // Validate ObjectId format (optional but recommended)
+//   if (!Types.ObjectId.isValid(foodId)) {
+//     throw new Error('Invalid food ID');
+//   }
 
-  const consumedFood = await UserConsumedFoodModel.findOne({
-    _id: foodId,
-    user_id,
-  });
-  if (!consumedFood) throw new Error('Consumed food not found or unauthorized');
+//   const consumedFood = await UserConsumedFoodModel.findOne({
+//     _id: foodId,
+//     user_id,
+//   });
+//   if (!consumedFood) throw new Error('Consumed food not found or unauthorized');
 
-  await UserConsumedFoodModel.deleteOne({ _id: foodId });
+//   await UserConsumedFoodModel.deleteOne({ _id: foodId });
 
-  return { message: 'Consumed food deleted successfully' };
-};
+//   return { message: 'Consumed food deleted successfully' };
+// };
 
 // const getAllFood = async (
 //   user_id: Types.ObjectId,
@@ -752,6 +771,79 @@ const deleteConsumedFood = async (foodId: string, user_id?: string) => {
 //     throw new Error(error.message || 'Failed to fetch food');
 //   }
 // };
+
+const deleteConsumedFood = async (foodId: string, user_id?: string) => {
+  if (!user_id) throw new Error('Unauthorized');
+  if (!Types.ObjectId.isValid(foodId)) throw new Error('Invalid food ID');
+
+  const doc = await UserConsumedFoodModel.findOne({
+    _id: foodId,
+    user_id,
+    isDeleted: false,
+  } as any);
+
+  if (!doc) throw new Error('Consumed food not found or unauthorized');
+
+  const before = doc.toObject();
+
+  (doc as any).isDeleted = true;
+  const existingHistory = ((doc as any).history ?? []) as any[];
+
+  (doc as any).history = [
+    ...existingHistory,
+    {
+      action: 'delete',
+      before,
+      after: null,
+      undone: false,
+      createdAt: new Date(),
+    },
+  ];
+
+  await doc.save();
+
+  return { message: 'Consumed food deleted successfully (soft delete)' };
+};
+
+const undoConsumedFood = async (foodId: string, user_id?: string) => {
+  if (!user_id) throw new Error('Unauthorized');
+  if (!Types.ObjectId.isValid(foodId)) throw new Error('Invalid food ID');
+
+  const doc = await UserConsumedFoodModel.findOne({
+  _id: foodId,
+  user_id,
+  isDeleted: true,
+} as any);
+
+
+  if (!doc) throw new Error('Consumed food not found or unauthorized');
+
+  const history = [...(((doc as any).history ?? []) as any[])].reverse();
+  const lastDelete = history.find(
+    (h) => h.action === 'delete' && h.undone !== true
+  );
+
+  if (!lastDelete) {
+    throw new Error('No undoable delete action found');
+  }
+
+  (doc as any).isDeleted = false;
+
+  (doc as any).history = (((doc as any).history ?? []) as any[]).map((h) => {
+    if (
+      h._id?.toString?.() === lastDelete._id?.toString?.() &&
+      h.action === 'delete' &&
+      h.undone !== true
+    ) {
+      return { ...h, undone: true };
+    }
+    return h;
+  });
+
+  await doc.save();
+
+  return { message: 'Consumed food restored successfully', data: doc };
+};
 
 const getAllFood = async (
   user_id: Types.ObjectId,
@@ -988,6 +1080,7 @@ const foodLoadingServices = {
   updateFood,
   deleteFood,
   deleteConsumedFood,
+  undoConsumedFood,
   analyzeFoodIngredient,
 };
 

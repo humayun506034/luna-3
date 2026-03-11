@@ -140,6 +140,29 @@ const FoodSchema = new Schema<TFood>(
   { timestamps: true }
 );
 
+// const UserConsumedFoodSchema = new Schema<TUserConsumedFood>(
+//   {
+//     user_id: { type: Schema.Types.ObjectId, required: true },
+//     consumedAs: {
+//       type: String,
+//       enum: ['breakfast', 'lunch', 'dinner', 'snack'],
+//       required: true,
+//     },
+//     nutritionPerServing: {
+//       type: {
+//         calories: { type: Number, required: true, default: 0 },
+//         protein: { type: Number, required: true, default: 0 },
+//         carbs: { type: Number, required: true, default: 0 },
+//         fats: { type: Number, required: true, default: 0 },
+//         fiber: { type: Number, required: true, default: 0 },
+//       },
+//       required: true,
+//     },
+//     microNutrients: { type: [MicroNutrientSchema], required: false },
+//     servings: { type: Number, required: true },
+//   },
+//   { timestamps: true }
+// );
 const UserConsumedFoodSchema = new Schema<TUserConsumedFood>(
   {
     user_id: { type: Schema.Types.ObjectId, required: true },
@@ -160,9 +183,46 @@ const UserConsumedFoodSchema = new Schema<TUserConsumedFood>(
     },
     microNutrients: { type: [MicroNutrientSchema], required: false },
     servings: { type: Number, required: true },
+
+    // undo support
+    isDeleted: {
+      type: Boolean,
+      default: false,
+      index: true,
+    },
+    history: {
+      type: [
+        {
+          action: {
+            type: String,
+            enum: ['create', 'update', 'delete'],
+            required: true,
+          },
+          before: {
+            type: Schema.Types.Mixed,
+            default: null,
+          },
+          after: {
+            type: Schema.Types.Mixed,
+            default: null,
+          },
+          undone: {
+            type: Boolean,
+            default: false,
+          },
+          createdAt: {
+            type: Date,
+            default: Date.now,
+          },
+        },
+      ],
+      default: [],
+    },
   },
   { timestamps: true }
 );
+
+
 
 export const FoodModel = model<TFood>('FoodCollection', FoodSchema);
 export const UserConsumedFoodModel = model<TUserConsumedFood>(
