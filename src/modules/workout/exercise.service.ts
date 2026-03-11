@@ -1911,12 +1911,11 @@ const liftLists = {
       user_id: user_id,
     });
     // console.log("🚀 ~ isItemExist:", isItemExist)
-
-    if (!isItemExist) {
-      throw new ApppError(404, 'Item not found');
-    }
     if (!itemId) {
       throw new ApppError(400, 'itemId is required');
+    }
+    if (!isItemExist) {
+      throw new ApppError(404, 'Item not found');
     }
 
     if (!Types.ObjectId.isValid(itemId)) {
