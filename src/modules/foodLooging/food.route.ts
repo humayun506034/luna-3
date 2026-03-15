@@ -9,60 +9,74 @@ foodRoutes.post(
   '/addFoodManually',
   auth([userRole.admin, userRole.user]),
   upload.single('file'),
-  foodLoaderController.addFoodManually,
+  foodLoaderController.addFoodManually
 );
 
 foodRoutes.post(
   '/addPersonalizeFoodManually',
   auth([userRole.admin, userRole.user]),
   upload.single('file'),
-  foodLoaderController.addPersonalizeFoodManually,
+  foodLoaderController.addPersonalizeFoodManually
 );
 
 foodRoutes.post(
   '/addConsumedFoodFromImgOrQRCodeOrFoodId',
   auth([userRole.admin, userRole.user]),
   upload.single('file'),
-  foodLoaderController.addConsumedFoodFromImgOrQRCodeOrFoodId,
+  foodLoaderController.addConsumedFoodFromImgOrQRCodeOrFoodId
 );
 
 foodRoutes.patch(
   '/undoConsumedFood/:id',
   auth([userRole.admin, userRole.user]),
-  foodLoaderController.undoConsumedFood,
+  foodLoaderController.undoConsumedFood
 );
-
 
 foodRoutes.delete(
   '/deleteConsumedFood/:id',
   auth([userRole.admin, userRole.user]),
-  foodLoaderController.deleteConsumedFood,
+  foodLoaderController.deleteConsumedFood
 );
-
+foodRoutes.get(
+  '/getAllConsumedFood/:id',
+  auth([userRole.admin, userRole.user]),
+  foodLoaderController.getSingleConsumedFood
+);
 foodRoutes.get(
   '/getAllFood',
   auth([userRole.admin, userRole.user]),
-  foodLoaderController.getAllFood,
+  foodLoaderController.getAllFood
+);
+
+foodRoutes.get(
+  '/getAllConsumedFood',
+  auth([userRole.admin, userRole.user]),
+  foodLoaderController.getAllConsumedFood
+);
+foodRoutes.get(
+  '/getConsumedFoodAnalytics',
+  auth([userRole.admin, userRole.user]),
+  foodLoaderController.getConsumedFoodAnalytics
 );
 
 foodRoutes.delete(
   '/deleteFood',
   auth([userRole.admin, userRole.user]),
-  foodLoaderController.deleteFood,
+  foodLoaderController.deleteFood
 );
 
 foodRoutes.put(
   '/updateFood',
   auth([userRole.admin, userRole.user]),
   upload.single('file'),
-  foodLoaderController.updateFood,
+  foodLoaderController.updateFood
 );
 
 foodRoutes.post(
   '/analyzeFoodIngredient',
   auth([userRole.admin, userRole.user]),
   upload.single('file'),
-  foodLoaderController.analyzeFoodIngredient,
+  foodLoaderController.analyzeFoodIngredient
 );
 
 export default foodRoutes;

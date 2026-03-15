@@ -214,9 +214,11 @@ const deleteConsumedFood = catchAsync(async (req, res) => {
 
 const undoConsumedFood = catchAsync(async (req, res) => {
   const user_id = req.user?.id;
+  console.log("🚀 ~ user_id:", user_id)
   if (!user_id) throw new Error('Unauthorized');
 
   const foodId = req.params.id;
+  console.log("🚀 ~ foodId:", foodId)
   if (!foodId) throw new Error('Consumed food ID is required');
 
   const result = await foodLoadingServices.undoConsumedFood(foodId as string, user_id);
@@ -335,6 +337,42 @@ const analyzeFoodIngredient = catchAsync(async (req, res) => {
   });
 });
 
+const getAllConsumedFood = catchAsync(async (req, res) => {
+  const user_id = req.user?.id;
+  if (!user_id) throw new Error('Unauthorized');
+  const result = await foodLoadingServices.getAllConsumedFood(user_id);
+  res.status(200).json({
+    status: 'success',
+    message: 'Consumed food found successfully',
+    data: result,
+  });
+});
+
+const getSingleConsumedFood= catchAsync(async (req, res) => {
+  const user_id = req.user?.id;
+  if (!user_id) throw new Error('Unauthorized');
+  const foodId = req.params.id as any;
+  if (!foodId) throw new Error('Consumed food ID is required');
+  const result = await foodLoadingServices.getSingleConsumedFood(foodId, user_id);
+  res.status(200).json({
+    status: 'success',
+    message: 'Single Consumed food found successfully',
+    data: result,
+  });
+});
+
+const getConsumedFoodAnalytics = catchAsync(async (req, res) => {
+  const user_id = req.user?.id;
+  if (!user_id) throw new Error('Unauthorized');
+  const result = await foodLoadingServices.getConsumedFoodAnalytics(user_id);
+  res.status(200).json({
+    status: 'success',
+    message: 'Consumed food analytics found successfully',
+    data: result,
+  });
+});
+
+
 const foodLoaderController = {
   addFoodManually,
   addPersonalizeFoodManually,
@@ -345,6 +383,9 @@ const foodLoaderController = {
   deleteConsumedFood,
   undoConsumedFood,
   analyzeFoodIngredient,
+  getAllConsumedFood,
+  getSingleConsumedFood,
+  getConsumedFoodAnalytics
 };
 
 export default foodLoaderController;

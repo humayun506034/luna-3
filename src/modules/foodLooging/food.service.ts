@@ -502,6 +502,7 @@ const addConsumedFoodFromImgOrQRCodeOrFoodId = async (
   parsedData?: Partial<TUserConsumedFood>,
   food_id?: Types.ObjectId
 ): Promise<TUserConsumedFood> => {
+  console.log("🚀 ~ addConsumedFoodFromImgOrQRCodeOrFoodId ~ food_id:", food_id)
   if (!user_id) throw new Error('User ID is required');
   if (!file && !parsedData && !food_id)
     throw new Error('At least one of file, data, or food_id must be provided');
@@ -597,6 +598,7 @@ const addConsumedFoodFromImgOrQRCodeOrFoodId = async (
     // ----------------------------
     else if (food_id) {
       const food = await FoodModel.findById(food_id);
+      console.log("🚀 ~ addConsumedFoodFromImgOrQRCodeOrFoodId ~ food:", food)
       if (!food) throw new Error('Food not found with food_id');
 
       nutritionPerServing = {
@@ -805,36 +807,86 @@ const deleteConsumedFood = async (foodId: string, user_id?: string) => {
   return { message: 'Consumed food deleted successfully (soft delete)' };
 };
 
+// const undoConsumedFood = async (foodId: string, user_id?: string) => {
+//   if (!user_id) throw new Error('Unauthorized');
+//   if (!Types.ObjectId.isValid(foodId)) throw new Error('Invalid food ID');
+
+//   const doc = await UserConsumedFoodModel.findOne({
+//     _id: foodId,
+//     user_id,
+//     isDeleted: false,
+//   } as any);
+
+//    const consumedFood = await UserConsumedFoodModel.findOne({
+//       _id: foodId,
+//       user_id: user_id,
+//       // isDeleted: false,
+//     });
+//   console.log("🚀 ~ undoConsumedFood ~ doc:", consumedFood)
+//   // console.log("🚀 ~ undoConsumedFood ~ doc:", doc)
+
+//   if (!doc) throw new Error('Consumed food not found ...');
+
+//   const history = [...(((doc as any).history ?? []) as any[])].reverse();
+//   const lastDelete = history.find(
+//     (h) => h.action === 'delete' && h.undone !== true
+//   );
+
+//   if (!lastDelete) {
+//     throw new Error('No undoable delete action found');
+//   }
+
+//   (doc as any).isDeleted = false;
+
+//   (doc as any).history = (((doc as any).history ?? []) as any[]).map((h) => {
+//     if (
+//       h._id?.toString?.() === lastDelete._id?.toString?.() &&
+//       h.action === 'delete' &&
+//       h.undone !== true
+//     ) {
+//       return { ...h, undone: true };
+//     }
+//     return h;
+//   });
+
+//   await doc.save();
+
+//   return { message: 'Consumed food restored successfully', data: doc };
+// };
+
 const undoConsumedFood = async (foodId: string, user_id?: string) => {
-  if (!user_id) throw new Error('Unauthorized');
-  if (!Types.ObjectId.isValid(foodId)) throw new Error('Invalid food ID');
+  if (!user_id) throw new Error("Unauthorized");
+  if (!Types.ObjectId.isValid(foodId)) throw new Error("Invalid food ID");
 
   const doc = await UserConsumedFoodModel.findOne({
-  _id: foodId,
-  user_id,
-  isDeleted: true,
-} as any);
+    _id: foodId,
+    user_id,
+  });
 
+  if (!doc) throw new Error("Consumed food not found");
 
-  if (!doc) throw new Error('Consumed food not found or unauthorized');
+  const history = [...(doc.history ?? [])].reverse();
 
-  const history = [...(((doc as any).history ?? []) as any[])].reverse();
-  const lastDelete = history.find(
-    (h) => h.action === 'delete' && h.undone !== true
-  );
+  // find last action not undone
+  const lastAction = history.find((h: any) => h.undone !== true);
 
-  if (!lastDelete) {
-    throw new Error('No undoable delete action found');
+  if (!lastAction) {
+    throw new Error("Nothing to undo");
   }
 
-  (doc as any).isDeleted = false;
+  // 🔹 CREATE undo -> delete
+  if (lastAction.action === "create") {
+    doc.isDeleted = true;
+  }
 
-  (doc as any).history = (((doc as any).history ?? []) as any[]).map((h) => {
-    if (
-      h._id?.toString?.() === lastDelete._id?.toString?.() &&
-      h.action === 'delete' &&
-      h.undone !== true
-    ) {
+  // 🔹 DELETE undo -> restore
+  if (lastAction.action === "delete") {
+    doc.isDeleted = false;
+  }
+
+  // mark history undone
+  doc.history = (doc.history ?? []).map((h: any) => {
+    if (h._id.toString() === (lastAction?._id as any).toString()) {
       return { ...h, undone: true };
     }
     return h;
@@ -842,8 +894,12 @@ const undoConsumedFood = async (foodId: string, user_id?: string) => {
 
   await doc.save();
 
-  return { message: 'Consumed food restored successfully', data: doc };
+  return {
+    message: "Undo successful",
+    data: doc,
+  };
 };
+
 
 const getAllFood = async (
   user_id: Types.ObjectId,
@@ -1072,6 +1128,87 @@ const deleteFood = async (
   }
 };
 
+const getAllConsumedFood = async (userId: Types.ObjectId) => {
+  try {
+    const consumedFood = await UserConsumedFoodModel.find({
+      user_id: userId,
+      isDeleted: false,
+    });
+    return consumedFood;
+  } catch (error: any) {
+    console.error('Error fetching consumed food:', error);
+    throw new Error(error.message || 'Failed to fetch consumed food');
+  }
+};
+const getSingleConsumedFood = async (
+  _id: Types.ObjectId,
+  userId: Types.ObjectId
+) => {
+  try {
+    const consumedFood = await UserConsumedFoodModel.findOne({
+      _id: _id,
+      user_id: userId,
+      isDeleted: false,
+    });
+    return consumedFood;
+  } catch (error: any) {
+    console.error('Error fetching consumed food:', error);
+    throw new Error(error.message || 'Failed to fetch consumed food');
+  }
+};
+
+const getConsumedFoodAnalytics = async (userId: Types.ObjectId) => {
+  try {
+    const foods = await UserConsumedFoodModel.find({
+      user_id: userId,
+      isDeleted: false,
+    }).lean();
+
+    let totalFoods = 0;
+    let totalCalories = 0;
+    let totalProtein = 0;
+    let totalCarbs = 0;
+    let totalFats = 0;
+    let totalFiber = 0;
+
+    const mealDistribution: Record<string, number> = {
+      breakfast: 0,
+      lunch: 0,
+      dinner: 0,
+      snack: 0,
+    };
+
+    foods.forEach((food) => {
+      totalFoods++;
+
+      totalCalories += food.nutritionPerServing.calories || 0;
+      totalProtein += food.nutritionPerServing.protein || 0;
+      totalCarbs += food.nutritionPerServing.carbs || 0;
+      totalFats += food.nutritionPerServing.fats || 0;
+      totalFiber += food.nutritionPerServing.fiber || 0;
+
+      if (mealDistribution[food.consumedAs] !== undefined) {
+        mealDistribution[food.consumedAs]++;
+      }
+    });
+
+    return {
+      totalFoods,
+      nutritionTotals: {
+        calories: totalCalories,
+        protein: totalProtein,
+        carbs: totalCarbs,
+        fats: totalFats,
+        fiber: totalFiber,
+      },
+      mealDistribution,
+    };
+  } catch (error: any) {
+    console.error("Error fetching consumed food analytics:", error);
+    throw new Error(error.message || "Failed to fetch consumed food analytics");
+  }
+};
+
 const foodLoadingServices = {
   addFoodManually,
   addPersonalizeFoodManually,
@@ -1082,6 +1219,9 @@ const foodLoadingServices = {
   deleteConsumedFood,
   undoConsumedFood,
   analyzeFoodIngredient,
+  getAllConsumedFood,
+  getSingleConsumedFood,
+  getConsumedFoodAnalytics
 };
 
 export default foodLoadingServices;

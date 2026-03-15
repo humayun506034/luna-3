@@ -1,3 +1,4 @@
+/* eslint-disable @typescript-eslint/no-explicit-any */
 import { Types } from 'mongoose';
 import catchAsync from '../../util/catchAsync';
 import globalResponseHandler from '../../util/globalResponseHandeler';
@@ -190,7 +191,7 @@ const getProfile = catchAsync(async (req, res) => {
 
 const updateUserByAdmin = catchAsync(async (req, res) => {
   const user_id = req.params.id;
-  const convertedUserId = idConverter(user_id);
+  const convertedUserId = idConverter(user_id as any);
 
   if (!convertedUserId) {
     throw new Error('User ID conversion failed');
@@ -210,7 +211,7 @@ const updateUserByAdmin = catchAsync(async (req, res) => {
 
 const getUserFullDetails = catchAsync(async (req, res) => {
   const userId = req.params.id;
-  const convertedUserId = idConverter(userId);
+  const convertedUserId = idConverter(userId as any);
 
   if (!convertedUserId) {
     throw new Error('Invalid user ID.');
@@ -276,6 +277,7 @@ const getWorkoutSetup = catchAsync(async (req, res) => {
     data: result,
   });
 });
+
 
 const userController = {
   createUser,

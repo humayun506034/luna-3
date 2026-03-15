@@ -77,6 +77,7 @@ export type TFood = {
 // };
 
 export type TUserConsumedFoodHistory = {
+  _id?: Types.ObjectId;
   action: 'create' | 'update' | 'delete';
   before: Record<string, unknown> | null;
   after: Record<string, unknown> | null;

@@ -1,3 +1,4 @@
+/* eslint-disable @typescript-eslint/no-explicit-any */
 import { Request, Response } from 'express';
 import { TipService } from './article.service';
 import { uploadImgToCloudinary } from '../../../util/uploadImgToCludinary';
@@ -38,7 +39,7 @@ const toggleSaveTip = async (req: Request, res: Response) => {
   try {
     const userId = req.user?.id;
     const { id } = req.params;
-    const result = await TipService.toggleSave(userId, id);
+    const result = await TipService.toggleSave(userId, id as any);
     res.json(result);
   } catch (error: any) {
     res.status(400).json({ message: error.message });
@@ -49,7 +50,7 @@ const toggleLikeTip = async (req: Request, res: Response) => {
   try {
     const userId = req.user?.id;
     const { id } = req.params;
-    const result = await TipService.toggleLike(userId, id);
+    const result = await TipService.toggleLike(userId, id as any);
     res.json(result);
   } catch (error: any) {
     res.status(400).json({ message: error.message });
@@ -91,7 +92,7 @@ const getAllTips = async (req: Request, res: Response) => {
 };
 
 const getTip = async (req: Request, res: Response) => {
-  const tip = await TipService.getTipById(req.params.id);
+  const tip = await TipService.getTipById(req.params.id as any);
   if (!tip) {
     res.status(404).json({ message: 'Tip not found' });
     return;
@@ -120,7 +121,7 @@ const getMyTips = async (req: Request, res: Response) => {
 const updateTip = async (req: Request, res: Response) => {
   try {
     const userId = req.user?.id;
-    const tip = await TipService.getTipById(req.params.id);
+    const tip = await TipService.getTipById(req.params.id as any);
 
     if (!tip) {
       res.status(404).json({ message: 'Tip not found!' });
@@ -153,7 +154,7 @@ const updateTip = async (req: Request, res: Response) => {
     }
 
     const updatedTip = await TipService.updateTip(
-      req.params.id,
+      req.params.id as any,
       userId,
       parsedData,
     );
@@ -166,7 +167,7 @@ const updateTip = async (req: Request, res: Response) => {
 const deleteTip = async (req: Request, res: Response) => {
   try {
     const userId = req.user?.id;
-    const tip = await TipService.getTipById(req.params.id);
+    const tip = await TipService.getTipById(req.params.id as any);
 
     if (!tip) {
       res.status(404).json({ message: 'Tip not found!' });
@@ -178,7 +179,7 @@ const deleteTip = async (req: Request, res: Response) => {
       return;
     }
 
-    await TipService.deleteTip(req.params.id, userId);
+    await TipService.deleteTip(req.params.id as any, userId);
     res.json({ message: 'Tip deleted successfully!' });
   } catch (error: any) {
     res.status(400).json({ message: error.message });

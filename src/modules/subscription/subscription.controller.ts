@@ -20,8 +20,11 @@ const buySubscription = catchAsync(async (req: Request, res: Response) => {
 
 const handleStripeWebhook = async (req: Request, res: Response) => {
   const sig = req.headers['stripe-signature'] as string;
-  const stripeSecretKey = process.env.STRIPE_SECRET_KEY as string;
-  const stripeWebhookSecret = process.env.STRIPE_WEBHOOK_SECRET as string;
+  //TODO:  need to before when it is deployed
+  // const stripeSecretKey = process.env.STRIPE_SECRET_KEY as string;
+  // const stripeWebhookSecret = process.env.STRIPE_WEBHOOK_SECRET as string;
+  const stripeSecretKey = "sk_test_51SzizdB6bJUKVVwHTCm1MtmHhOo4PI5D6MWRtT8p1u0o0LhLPaaiXLVZ7iiUk3MKCJGV82Q1WNiyr4qH6h4d6OHZ00IHPIfkEa" as string;
+  const stripeWebhookSecret = "whsec_LsUZUhkYVIbuzuDesDUcekGgSwtxXCcn" as string;
   const stripe = new Stripe(stripeSecretKey);
 
   let event: Stripe.Event;

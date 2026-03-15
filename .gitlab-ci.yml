@@ -1,0 +1,71 @@
+stages:
+  - build
+  - push
+  - deploy
+
+variables:
+  DOCKER_HOST: tcp://docker:2375
+  DOCKER_TLS_CERTDIR: ""
+  DOCKER_DRIVER: overlay2
+
+.default_docker:
+  image: docker:27.5.1-cli
+  services:
+    - name: docker:27.5.1-dind
+      command: ["--tls=false"]
+      variables:
+        HEALTHCHECK_TCP_PORT: "2375"
+
+  before_script:
+    - set -e
+    - apk add --no-cache make
+    - echo "$DOCKER_PASSWORD" | docker login -u "$DOCKER_USERNAME" --password-stdin
+    - docker info
+
+build:
+  stage: build
+  extends:
+    - .default_docker
+  script:
+    - make test
+  rules:
+    - if: '$CI_COMMIT_BRANCH == "main"'
+
+push:
+  stage: push
+  extends:
+    - .default_docker
+  script:
+    - make push
+  needs:
+    - build
+  rules:
+    - if: '$CI_COMMIT_BRANCH == "main"'
+
+deploy:
+  stage: deploy
+  image: alpine:3.21
+
+  before_script:
+    - set -e
+    - apk add --no-cache openssh-client rsync
+    - mkdir -p ~/.ssh
+    - echo "$VPS_SSH_KEY" | tr -d '\r' > ~/.ssh/id_rsa
+    - chmod 600 ~/.ssh/id_rsa
+    - ssh-keyscan -H "$VPS_HOST" >> ~/.ssh/known_hosts
+
+  script:
+    - rsync -avz compose.yml "$VPS_USER@$VPS_HOST:/home/$VPS_USER/app/"
+    - |
+      ssh "$VPS_USER@$VPS_HOST" "
+        set -e
+        cd /home/$VPS_USER/app
+        docker compose pull
+        docker compose up -d
+        docker image prune -f
+      "
+
+  needs:
+    - push
+  rules:
+    - if: '$CI_COMMIT_BRANCH == "main"'
