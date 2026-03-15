@@ -91,7 +91,9 @@ const createStripeCheckoutSession = async (
   subscriptionId: string,
   customerEmail?: string
 ) => {
-  const stripeSecretKey = process.env.STRIPE_SECRET_KEY;
+  // TODO: Need to change to before when it is deployed
+  // const stripeSecretKey = process.env.STRIPE_SECRET_KEY;
+    const stripeSecretKey = "sk_test_51SzizdB6bJUKVVwHTCm1MtmHhOo4PI5D6MWRtT8p1u0o0LhLPaaiXLVZ7iiUk3MKCJGV82Q1WNiyr4qH6h4d6OHZ00IHPIfkEa" as string;
   if (!stripeSecretKey) {
     throw new Error('STRIPE_SECRET_KEY is not configured.');
   }
