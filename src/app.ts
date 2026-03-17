@@ -45,11 +45,18 @@ import cors from 'cors';
 import globalErrorHandler from './middleware/globalErrorHandler';
 import routeNotFound from './middleware/routeNotFound';
 import Routes from './routes';
+import { handleStripeWebhook } from './modules/subscription/subscription.controller';
 
 // Stripe webhook must be raw and must come before express.json()
+// app.post(
+//   '/api/v1/subscriptions/webhook/stripe',
+//   express.raw({ type: 'application/json' })
+// );
+
 app.post(
   '/api/v1/subscriptions/webhook/stripe',
-  express.raw({ type: 'application/json' })
+  express.raw({ type: 'application/json' }),
+  handleStripeWebhook   // ✅ MUST add this
 );
 
 // normal middlewares
