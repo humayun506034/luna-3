@@ -29,9 +29,6 @@
 //   totalCaloryBurn: number;
 // };
 
-
-
-
 import { Types } from 'mongoose';
 
 export type TExercise = {
@@ -48,6 +45,8 @@ export type TExercise = {
     | 'high_Intensity'
     | 'weight_training'
     | 'bodyweight_exercises';
+  isCompleted?: boolean;
+  isDeleted?:boolean
 };
 
 export type UserExercisePerform = {

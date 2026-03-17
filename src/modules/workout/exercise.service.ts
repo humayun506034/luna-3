@@ -617,7 +617,7 @@ const getExerciseBothCommonAndPersonalize = async (
 
   if (role === 'admin') {
     try {
-      const exercises = await ExerciseModel.find({})
+      const exercises = await ExerciseModel.find({ isDeleted: false })
         .populate({
           path: 'user_id',
           select: 'name email img role', // only needed fields
@@ -630,7 +630,10 @@ const getExerciseBothCommonAndPersonalize = async (
     }
   } else if (role === 'user') {
     try {
-      const exercises = await ExerciseModel.find({ user_id: user_id })
+      const exercises = await ExerciseModel.find({
+        user_id: user_id,
+        isDeleted: false,
+      })
         .populate({
           path: 'user_id',
           select: 'name email img role', // only needed fields
@@ -644,7 +647,8 @@ const getExerciseBothCommonAndPersonalize = async (
   }
 };
 
-const getExerciseById = async (exercise_id: Types.ObjectId) => {
+const getExerciseById = async (userId: any, exercise_id: Types.ObjectId) => {
+  // console.log('🚀 ~ getExerciseById ~ _id:', userId);
   if (!Types.ObjectId.isValid(exercise_id)) {
     throw new Error('Invalid exercise ID.');
   }
@@ -653,12 +657,25 @@ const getExerciseById = async (exercise_id: Types.ObjectId) => {
     throw new Error('MongoDB connection is not ready.');
   }
 
-  const findExercise = await ExerciseModel.findById(exercise_id)
+  const findExercise = await ExerciseModel.findOne({
+    _id: exercise_id,
+    user_id: userId,
+  })
     .populate({
       path: 'user_id',
-      select: 'name email img role', // only needed fields
+      select: 'name email img role', // only the necessary fields
     })
     .lean();
+
+  if (findExercise?.isDeleted) {
+    throw new ApppError(404, 'Exercise is deleted !');
+  }
+  // console.log("🚀 ~ getExerciseById ~ findExercise:", findExercise)
+  const findWorkout = await UserExercisePerformModel.find({
+    exercise_id: exercise_id,
+    user_id: userId,
+  }).lean();
+  // console.log("🚀 ~ getExerciseById ~ findWorkout:", findWorkout)
 
   if (!findExercise) {
     throw new ApppError(404, 'Exercise not found');
@@ -668,7 +685,12 @@ const getExerciseById = async (exercise_id: Types.ObjectId) => {
     throw new ApppError(404, 'Exercise not found.');
   }
 
-  return findExercise;
+  const combineResult = {
+    ...findExercise,
+    workoutList: findWorkout, // Store workout results inside the `workoutDetails` key
+  };
+
+  return combineResult;
   //   const findExercise = await ExerciseModel.findOne({
   //     _id: exercise_id,
   //   }).lean();
@@ -938,6 +960,46 @@ const performExercise = async (
 
 const markExerciseAsCompleated = async (
   user_id: Types.ObjectId,
+  exercise_id: Types.ObjectId
+) => {
+  try {
+    if (!Types.ObjectId.isValid(user_id)) {
+      throw new Error('Invalid user ID');
+    }
+    if (!Types.ObjectId.isValid(exercise_id)) {
+      throw new Error('Invalid performed exercise ID');
+    }
+
+    const user = await WorkoutASetupModel.findOne({ user_id }).lean();
+    if (!user) {
+      throw new Error('User not found');
+    }
+
+    const exercise = await ExerciseModel.findOne({
+      _id: exercise_id,
+    }).lean();
+    console.log('🚀 ~ markExerciseAsCompleated ~ exercise:', exercise);
+    if (!exercise) {
+      throw new Error('Exercise not found');
+    }
+
+    if (exercise?.isCompleted) {
+      throw new Error('Exercise already completed');
+    }
+
+    const markExerciseAsCompleated = await ExerciseModel.findOneAndUpdate(
+      { _id: exercise_id },
+      { $set: { isCompleted: true } },
+      { new: true }
+    );
+
+    return markExerciseAsCompleated;
+  } catch (error: any) {
+    throw new Error(error.message || 'Failed to mark exercise as completed');
+  }
+};
+const marWorkoutAsCompleated = async (
+  user_id: Types.ObjectId,
   Performed_exercise_id: Types.ObjectId
 ) => {
   try {
@@ -1048,7 +1110,6 @@ const markExerciseAsCompleated = async (
     throw new Error(error.message || 'Failed to mark exercise as completed');
   }
 };
-
 const getPerformedExerciseById = async (
   id: Types.ObjectId,
   userId: Types.ObjectId
@@ -1090,14 +1151,15 @@ const deleteExercise = async (
     throw new Error('Not authorized to delete this exercise');
   }
 
-  await ExerciseModel.findByIdAndDelete(exerciseId);
+  await ExerciseModel.findByIdAndUpdate(exerciseId, {
+    isDeleted: true,
+  });
 
   return { success: true, message: 'Exercise deleted successfully' };
 };
 
 // workout logs (newWorkout style) on existing model
 const workoutLogs = {
-  
   create: async (
     user_id: Types.ObjectId,
     payload: {
@@ -1140,6 +1202,13 @@ const workoutLogs = {
     if (!user) throw new ApppError(404, 'User setup not found');
 
     const exercise = await ExerciseModel.findById(payload.exercise_id).lean();
+    if(exercise?.isDeleted) throw new ApppError(404, 'Exercise is Deleted, Please create a new one or replace it with a new one !');
+    if (exercise?.isCompleted) {
+      throw new ApppError(
+        400,
+        'Exercise already completed, You cannot create a new workout log for it !'
+      );
+    }
     if (!exercise) throw new ApppError(404, 'Exercise not found');
 
     let validatedWeightLifted = payload.weightLifted;
@@ -1384,219 +1453,260 @@ const workoutLogs = {
   //   return prev;
   // },
 
-
   update: async (
-  user_id: Types.ObjectId,
-  id: string,
-  payload: {
-    exercise_id?: string | Types.ObjectId;
-    set?: number;
-    reps?: number;
-    resetTime?: number;
-    weightLifted?: number;
-    distance?: number;
-    timeToPerform?: number;
-    note?: string;
-    image?: string;
-    isCompleted?: boolean;
-    totalCaloryBurn?: number; // manual override
-    skipCalorieCalculation?: boolean; // optional
-  },
-  file?: Express.Multer.File
-) => {
-  const prev = await UserExercisePerformModel.findOne({
-    _id: id,
-    user_id,
-    isDeleted: false,
-  } as any);
+    user_id: Types.ObjectId,
+    id: string,
+    payload: {
+      exercise_id?: string | Types.ObjectId;
+      set?: number;
+      reps?: number;
+      resetTime?: number;
+      weightLifted?: number;
+      distance?: number;
+      timeToPerform?: number;
+      note?: string;
+      image?: string;
+      isCompleted?: boolean;
+      totalCaloryBurn?: number; // manual override
+      skipCalorieCalculation?: boolean; // optional
+    },
+    file?: Express.Multer.File
+  ) => {
+    const prev = await UserExercisePerformModel.findOne({
+      _id: id,
+      user_id,
+      isDeleted: false,
+    } as any);
 
-  if (!prev) throw new ApppError(404, 'Workout log not found');
+    if (!prev) throw new ApppError(404, 'Workout log not found');
 
-  const before = prev.toObject();
+    if (prev?.isCompleted)
+      throw new ApppError(400, 'Cannot update completed exercise');
 
-  const {
-    totalCaloryBurn: manualTotalCaloryBurn,
-    skipCalorieCalculation,
-    ...updatePayload
-  } = payload;
+    const before = prev.toObject();
 
-  if (file?.path) {
-    try {
-      const imageName = `${updatePayload.exercise_id ?? before.exercise_id ?? 'workout'}-${Date.now()}`;
-      const uploadResult = await uploadImgToCloudinary(imageName, file.path);
-      updatePayload.image = uploadResult.secure_url;
-    } catch (error) {
-      await deleteFile(file.path);
-      throw error;
+    const {
+      totalCaloryBurn: manualTotalCaloryBurn,
+      skipCalorieCalculation,
+      ...updatePayload
+    } = payload;
+
+    if (file?.path) {
+      try {
+        const imageName = `${updatePayload.exercise_id ?? before.exercise_id ?? 'workout'}-${Date.now()}`;
+        const uploadResult = await uploadImgToCloudinary(imageName, file.path);
+        updatePayload.image = uploadResult.secure_url;
+      } catch (error) {
+        await deleteFile(file.path);
+        throw error;
+      }
     }
-  }
 
-  // previous + incoming payload merge করে effective state তৈরি
-  const effectiveData: any = {
-    ...before,
-    ...updatePayload,
-  };
-
-  if (!effectiveData.exercise_id) {
-    throw new ApppError(400, 'exercise_id is required');
-  }
-  if (!Types.ObjectId.isValid(String(effectiveData.exercise_id))) {
-    throw new ApppError(400, 'Invalid exercise ID');
-  }
-
-  if (effectiveData.set === undefined || effectiveData.set <= 0) {
-    throw new ApppError(400, 'set must be a positive number');
-  }
-  if (effectiveData.reps === undefined || effectiveData.reps <= 0) {
-    throw new ApppError(400, 'reps must be a positive number');
-  }
-  if (effectiveData.resetTime === undefined || effectiveData.resetTime < 0) {
-    throw new ApppError(400, 'resetTime must be a non-negative number');
-  }
-
-  const user = await WorkoutASetupModel.findOne({ user_id }).lean();
-  if (!user) throw new ApppError(404, 'User setup not found');
-
-  const exercise = await ExerciseModel.findById(effectiveData.exercise_id).lean();
-  if (!exercise) throw new ApppError(404, 'Exercise not found');
-
-  let validatedWeightLifted = effectiveData.weightLifted;
-  const validatedDistance = effectiveData.distance;
-
-  // Type-specific validation (truthy check না, undefined/null check)
-  if (exercise.exerciseType === 'strength_Training') {
-    if (effectiveData.resetTime == null) {
-      throw new ApppError(400, 'resetTime is required for strength_training exercise');
-    }
-    if (effectiveData.weightLifted == null) {
-      throw new ApppError(400, 'weightLifted is required for strength_training exercise');
-    }
-  }
-
-  if (exercise.exerciseType === 'cardio') {
-    if (effectiveData.resetTime == null) {
-      throw new ApppError(400, 'resetTime is required for cardio exercise');
-    }
-    if (effectiveData.distance == null) {
-      throw new ApppError(400, 'distance is required for cardio exercise');
-    }
-  }
-
-  if (exercise.exerciseType === 'stretching' && effectiveData.resetTime == null) {
-    throw new ApppError(400, 'resetTime is required for stretching exercise');
-  }
-
-  if (exercise.exerciseType === 'balance_Training' && effectiveData.resetTime == null) {
-    throw new ApppError(400, 'resetTime is required for balance_Training exercise');
-  }
-
-  if (exercise.exerciseType === 'high_Intensity') {
-    if (effectiveData.resetTime == null) {
-      throw new ApppError(400, 'resetTime is required for high_intensity exercise');
-    }
-    if (effectiveData.weightLifted == null) {
-      throw new ApppError(400, 'weightLifted is required for high_intensity exercise');
-    }
-  }
-
-  if (exercise.exerciseType === 'weight_training') {
-    if (effectiveData.resetTime == null) {
-      throw new ApppError(400, 'resetTime is required for weight_training exercise');
-    }
-    if (effectiveData.weightLifted == null) {
-      throw new ApppError(400, 'weightLifted is required for weight_training exercise');
-    }
-    if (validatedWeightLifted <= 0) {
-      throw new ApppError(400, 'weightLifted must be a positive number for weight_training');
-    }
-  }
-
-  if (exercise.exerciseType === 'bodyweight_exercises') {
-    if (effectiveData.resetTime == null) {
-      throw new ApppError(400, 'resetTime is required for bodyweight_exercises exercise');
-    }
-    if (effectiveData.weightLifted == null) {
-      throw new ApppError(400, 'weightLifted is required for bodyweight_exercises exercise');
-    }
-  }
-
-  if (exercise.exerciseType === 'cardio') {
-    if (validatedDistance == null || validatedDistance <= 0) {
-      throw new ApppError(400, 'distance must be a positive number for cardio exercise');
-    }
-    validatedWeightLifted = 0;
-  }
-
-  // calorie logic: manual override > skip > AI recalc
-  let totalCaloryBurn: number;
-  if (typeof manualTotalCaloryBurn === 'number') {
-    totalCaloryBurn = manualTotalCaloryBurn;
-  } else if (skipCalorieCalculation) {
-    totalCaloryBurn = 0;
-  } else {
-    const dataForCaloryCount = {
-      height: user.height,
-      body_weight: user.weight,
-      exerciseName: exercise.name,
-      exerciseType: exercise.exerciseType,
-      exerciseDescription: exercise.description,
-      weightLifted: validatedWeightLifted ?? 0,
-      reps: effectiveData.reps,
-      sets: effectiveData.set,
-      resetTime: effectiveData.resetTime,
-      restTime: effectiveData.resetTime,
-      distance: validatedDistance ?? 0,
+    // previous + incoming payload merge করে effective state তৈরি
+    const effectiveData: any = {
+      ...before,
+      ...updatePayload,
     };
 
-    try {
-      const response = await axios.post(
-        `${process.env.AI_BASE_URL}workout-calorie/calculate-calories`,
-        dataForCaloryCount,
-        { headers: { 'Content-Type': 'application/json' } }
-      );
+    if (!effectiveData.exercise_id) {
+      throw new ApppError(400, 'exercise_id is required');
+    }
+    if (!Types.ObjectId.isValid(String(effectiveData.exercise_id))) {
+      throw new ApppError(400, 'Invalid exercise ID');
+    }
 
-      if (
-        !response.data ||
-        typeof response.data.total_calories_burned !== 'number'
-      ) {
-        throw new ApppError(502, 'Invalid response from calorie AI API');
+    if (effectiveData.set === undefined || effectiveData.set <= 0) {
+      throw new ApppError(400, 'set must be a positive number');
+    }
+    if (effectiveData.reps === undefined || effectiveData.reps <= 0) {
+      throw new ApppError(400, 'reps must be a positive number');
+    }
+    if (effectiveData.resetTime === undefined || effectiveData.resetTime < 0) {
+      throw new ApppError(400, 'resetTime must be a non-negative number');
+    }
+
+    const user = await WorkoutASetupModel.findOne({ user_id }).lean();
+    if (!user) throw new ApppError(404, 'User setup not found');
+
+    const exercise = await ExerciseModel.findById(
+      effectiveData.exercise_id
+    ).lean();
+    if (!exercise) throw new ApppError(404, 'Exercise not found');
+
+    let validatedWeightLifted = effectiveData.weightLifted;
+    const validatedDistance = effectiveData.distance;
+
+    // Type-specific validation (truthy check না, undefined/null check)
+    if (exercise.exerciseType === 'strength_Training') {
+      if (effectiveData.resetTime == null) {
+        throw new ApppError(
+          400,
+          'resetTime is required for strength_training exercise'
+        );
       }
+      if (effectiveData.weightLifted == null) {
+        throw new ApppError(
+          400,
+          'weightLifted is required for strength_training exercise'
+        );
+      }
+    }
 
-      totalCaloryBurn = response.data.total_calories_burned;
-    } catch (apiError: any) {
+    if (exercise.exerciseType === 'cardio') {
+      if (effectiveData.resetTime == null) {
+        throw new ApppError(400, 'resetTime is required for cardio exercise');
+      }
+      if (effectiveData.distance == null) {
+        throw new ApppError(400, 'distance is required for cardio exercise');
+      }
+    }
+
+    if (
+      exercise.exerciseType === 'stretching' &&
+      effectiveData.resetTime == null
+    ) {
+      throw new ApppError(400, 'resetTime is required for stretching exercise');
+    }
+
+    if (
+      exercise.exerciseType === 'balance_Training' &&
+      effectiveData.resetTime == null
+    ) {
       throw new ApppError(
-        502,
-        'Failed to calculate calories from AI API: ' +
-          (apiError.response?.data?.message || apiError.message)
+        400,
+        'resetTime is required for balance_Training exercise'
       );
     }
-  }
 
-  Object.assign(prev, {
-    ...updatePayload,
-    totalCaloryBurn,
-    weightLifted: validatedWeightLifted,
-    ...(validatedDistance !== undefined && { distance: validatedDistance }),
-  });
+    if (exercise.exerciseType === 'high_Intensity') {
+      if (effectiveData.resetTime == null) {
+        throw new ApppError(
+          400,
+          'resetTime is required for high_intensity exercise'
+        );
+      }
+      if (effectiveData.weightLifted == null) {
+        throw new ApppError(
+          400,
+          'weightLifted is required for high_intensity exercise'
+        );
+      }
+    }
 
-  const after = prev.toObject();
-  const existingHistory = ((prev as any).history ?? []) as any[];
-  (prev as any).history = [
-    ...existingHistory,
-    {
-      action: 'update',
-      before,
-      after,
-      undone: false,
-      createdAt: new Date(),
-    },
-  ];
+    if (exercise.exerciseType === 'weight_training') {
+      if (effectiveData.resetTime == null) {
+        throw new ApppError(
+          400,
+          'resetTime is required for weight_training exercise'
+        );
+      }
+      if (effectiveData.weightLifted == null) {
+        throw new ApppError(
+          400,
+          'weightLifted is required for weight_training exercise'
+        );
+      }
+      if (validatedWeightLifted <= 0) {
+        throw new ApppError(
+          400,
+          'weightLifted must be a positive number for weight_training'
+        );
+      }
+    }
 
-  await prev.save();
-  return prev;
-},
+    if (exercise.exerciseType === 'bodyweight_exercises') {
+      if (effectiveData.resetTime == null) {
+        throw new ApppError(
+          400,
+          'resetTime is required for bodyweight_exercises exercise'
+        );
+      }
+      if (effectiveData.weightLifted == null) {
+        throw new ApppError(
+          400,
+          'weightLifted is required for bodyweight_exercises exercise'
+        );
+      }
+    }
 
+    if (exercise.exerciseType === 'cardio') {
+      if (validatedDistance == null || validatedDistance <= 0) {
+        throw new ApppError(
+          400,
+          'distance must be a positive number for cardio exercise'
+        );
+      }
+      validatedWeightLifted = 0;
+    }
 
+    // calorie logic: manual override > skip > AI recalc
+    let totalCaloryBurn: number;
+    if (typeof manualTotalCaloryBurn === 'number') {
+      totalCaloryBurn = manualTotalCaloryBurn;
+    } else if (skipCalorieCalculation) {
+      totalCaloryBurn = 0;
+    } else {
+      const dataForCaloryCount = {
+        height: user.height,
+        body_weight: user.weight,
+        exerciseName: exercise.name,
+        exerciseType: exercise.exerciseType,
+        exerciseDescription: exercise.description,
+        weightLifted: validatedWeightLifted ?? 0,
+        reps: effectiveData.reps,
+        sets: effectiveData.set,
+        resetTime: effectiveData.resetTime,
+        restTime: effectiveData.resetTime,
+        distance: validatedDistance ?? 0,
+      };
+
+      try {
+        const response = await axios.post(
+          `${process.env.AI_BASE_URL}workout-calorie/calculate-calories`,
+          dataForCaloryCount,
+          { headers: { 'Content-Type': 'application/json' } }
+        );
+
+        if (
+          !response.data ||
+          typeof response.data.total_calories_burned !== 'number'
+        ) {
+          throw new ApppError(502, 'Invalid response from calorie AI API');
+        }
+
+        totalCaloryBurn = response.data.total_calories_burned;
+      } catch (apiError: any) {
+        throw new ApppError(
+          502,
+          'Failed to calculate calories from AI API: ' +
+            (apiError.response?.data?.message || apiError.message)
+        );
+      }
+    }
+
+    Object.assign(prev, {
+      ...updatePayload,
+      totalCaloryBurn,
+      weightLifted: validatedWeightLifted,
+      ...(validatedDistance !== undefined && { distance: validatedDistance }),
+    });
+
+    const after = prev.toObject();
+    const existingHistory = ((prev as any).history ?? []) as any[];
+    (prev as any).history = [
+      ...existingHistory,
+      {
+        action: 'update',
+        before,
+        after,
+        undone: false,
+        createdAt: new Date(),
+      },
+    ];
+
+    await prev.save();
+    return prev;
+  },
 
   list: async (user_id: Types.ObjectId) => {
     return UserExercisePerformModel.find({
@@ -2326,6 +2436,7 @@ const exerciseServicves = {
   getAllPerformedExercise,
   workoutLogs,
   liftLists,
+  marWorkoutAsCompleated,
 };
 
 export default exerciseServicves;

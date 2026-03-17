@@ -135,6 +135,16 @@ const ExerciseSchema = new Schema<TExercise>({
     ],
     required: true,
   },
+  isCompleted: {
+    type: Boolean,
+    required: false,
+    default: false,
+  },
+  isDeleted: {
+    type: Boolean,
+    required: false,
+    default: false,
+  },
 });
 
 const UserExercisePerformSchema = new Schema<UserExercisePerform>(

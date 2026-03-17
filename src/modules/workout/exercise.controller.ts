@@ -313,6 +313,7 @@ const getExerciseById = catchAsync(async (req, res) => {
   const convertedExerciseId = idConverter(exerciseId) as Types.ObjectId;
 
   const exercise = (await exerciseServicves.getExerciseById(
+    req?.user?.id,
     convertedExerciseId
   )) as any;
 
@@ -347,7 +348,7 @@ const performExercise = catchAsync(async (req, res) => {
   });
 });
 
-const markExerciseAsCompleated = catchAsync(async (req, res) => {
+const markWorkoutAsCompleated = catchAsync(async (req, res) => {
   const userId = req.user?.id;
   if (!userId || !Types.ObjectId.isValid(userId)) {
     throw new Error('User not authenticated.');
@@ -362,7 +363,7 @@ const markExerciseAsCompleated = catchAsync(async (req, res) => {
     performedExerciseId
   ) as Types.ObjectId;
 
-  const updatedExercise = await exerciseServicves.markExerciseAsCompleated(
+  const updatedExercise = await exerciseServicves.marWorkoutAsCompleated(
     convertedUserId,
     convertedPerformedExerciseId
   );
@@ -371,6 +372,34 @@ const markExerciseAsCompleated = catchAsync(async (req, res) => {
     throw new Error('Performed exercise not found or user not authorized.');
   }
 
+  res.status(200).json({
+    success: true,
+    message: 'Exercise marked as completed successfully.',
+    data: updatedExercise,
+  });
+});
+const markExerciseAsCompleated = catchAsync(async (req, res) => {
+  const userId = req.user?.id;
+  if (!userId || !Types.ObjectId.isValid(userId)) {
+    throw new Error('User not authenticated.');
+  }
+  const convertedUserId = idConverter(userId) as Types.ObjectId;
+
+  const performedExerciseId = req.query.exerciseId as string;
+  if (!Types.ObjectId.isValid(performedExerciseId)) {
+    throw new Error('Invalid performed exercise ID.');
+  }
+  const convertedExerciseId = idConverter(
+    performedExerciseId
+  ) as Types.ObjectId;
+  console.log("🚀 ~ convertedExerciseId:", convertedExerciseId)
+
+  const updatedExercise = await exerciseServicves.markExerciseAsCompleated(
+    convertedUserId,
+    convertedExerciseId
+  );
+
+ 
   res.status(200).json({
     success: true,
     message: 'Exercise marked as completed successfully.',
@@ -782,6 +811,7 @@ const exerciseController = {
   deleteLiftList,
   undoLiftList,
   undoLatestLiftList,
+  markWorkoutAsCompleated
 };
 
 export default exerciseController;

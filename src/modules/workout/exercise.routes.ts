@@ -133,6 +133,11 @@ exerciseRoutes.patch(
   auth([userRole.user, userRole.admin]),
   exerciseController.markExerciseAsCompleated
 );
+exerciseRoutes.patch(
+  '/markWorkoutAsCompleated',
+  auth([userRole.user, userRole.admin]),
+  exerciseController.markWorkoutAsCompleated
+);
 
 exerciseRoutes.delete(
   '/deleteExercise/:id',
